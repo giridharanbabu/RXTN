@@ -1,4 +1,4 @@
-from pkg.config.config import settings
+from config.config import settings
 from fastapi.exceptions import HTTPException
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText

@@ -4,16 +4,16 @@ import json
 from datetime import datetime, timedelta
 from random import randbytes
 from bson import json_util
-from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends, Response
+from fastapi import HTTPException, status, APIRouter, Request, Depends, Response
 from jose import jwt
 from pkg.routes.user_registration.user_models import CreateUserSchema, LoginUserSchema, PasswordResetRequest, UserReponse
 from pkg.database.database import database
 from pkg.routes.authentication import val_token, verify_otp
 from pkg.routes.user_registration import user_utils
 from pkg.routes.emails import Email
-from pkg.routes.user_registration.user_utils import create_access_token, generate_otp
-from pkg.routes.serializers.userSerializers import userEntity, userResponseEntity
-from pkg.config.config import settings
+from pkg.routes.user_registration.user_utils import generate_otp
+from pkg.routes.serializers.userSerializers import userEntity
+from config.config import settings
 
 user_router = APIRouter()
 user_collection = database.get_collection('users')

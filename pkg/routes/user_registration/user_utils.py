@@ -3,7 +3,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from typing import Union, Any
-from pkg.config.config import settings
+from config.config import settings
 from pkg.database.database import database
 user_collection = database.get_collection('users')
 

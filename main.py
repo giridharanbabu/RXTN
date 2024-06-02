@@ -1,6 +1,5 @@
 import uvicorn
 from fastapi import Depends, FastAPI
-
 from pkg.routes import authentication
 from pkg.routes.user_registration import user_actions
 from pkg.routes.customer import customer
@@ -27,7 +26,6 @@ app.add_middleware(CORSMiddleware,
                    )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
-
 app.include_router(user_actions.user_router, tags=["users"])
 app.include_router(members.members_router, tags=["Partners"])
 app.include_router(customer.customer_router, tags=["customer"])

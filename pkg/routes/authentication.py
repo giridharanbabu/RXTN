@@ -1,9 +1,8 @@
-import hashlib
 from datetime import datetime
 
 from passlib.context import CryptContext
 import jwt
-from pkg.config.config import settings
+from config.config import settings
 from fastapi import HTTPException, status, Header, APIRouter, Depends
 from fastapi.security import (OAuth2PasswordRequestForm)
 from pkg.database.database import database

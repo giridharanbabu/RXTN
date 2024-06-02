@@ -1,12 +1,9 @@
-import hashlib
 import json
-from random import randbytes
 
 import bson
-from bson import json_util
-from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends, Response
+from fastapi import HTTPException, status, APIRouter, Depends, Response
 
-from pkg.config.config import settings
+from config.config import settings
 from pkg.routes.customer.customer_models import *
 from pkg.database.database import database
 from pkg.routes.authentication import val_token
