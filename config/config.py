@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     EMAIL_EXPIRATION_TIME_MIN: int
 
     class Config:
-        env_file = '.env'
+        env_file = './.env'
         extra = "allow"
 
 
