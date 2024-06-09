@@ -16,3 +16,21 @@ class RequestModel(BaseModel):
     request_fields: List
     expiresAt: datetime
     created_time: datetime or None
+
+
+class MemberBaseSchema(BaseModel):
+    name: str
+    email: str
+    photo: str
+    organization_name: Optional[str] = None
+    organization_type: Optional[str] = None
+    description: Optional[str] = None
+    role: str
+    created_at: datetime or None = None
+    updated_at: datetime or None = None
+
+
+class CreateMemberSchema(MemberBaseSchema):
+    password: constr(min_length=8)
+    passwordConfirm: str
+    verified: bool = False
