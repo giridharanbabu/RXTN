@@ -23,7 +23,7 @@ user_collection.create_index("expireAt", expireAfterSeconds=10)
 @user_router.post("/user/register")
 async def create_user(payload: CreateUserSchema):
     # Check if user already exist
-    if payload.role in ['org-admin', 'admin']:
+    if payload.role in ['org-admin', 'admin', 'partner']:
         find_user = user_collection.find_one({'email': payload.email.lower()})
         if find_user:
             if find_user['verified'] is False:
