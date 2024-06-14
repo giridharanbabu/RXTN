@@ -113,7 +113,7 @@ async def login(payload: LoginUserSchema, response: Response):
     return {'status': 'success', 'access_token': access_token}
 
 
-@user_router.post("/user/me")
+@user_router.get("/user/me")
 async def user_login(request: Request):
     """login session"""
     access_token = request.cookies.get("access_token")
