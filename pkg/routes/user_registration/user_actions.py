@@ -118,7 +118,7 @@ async def user_login(request: Request):
     """login session"""
     access_token = request.cookies.get("access_token")
     if access_token is None:
-        return {"message": "No token found in cookie"}
+        raise HTTPException(status_code=400, detail="Token not found in cookies")
     else:
         payload = jwt.decode(access_token, settings.SECRET, algorithms=[settings.ALGORITHM])
         return payload
