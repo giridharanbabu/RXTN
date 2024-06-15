@@ -8,7 +8,7 @@ class Members(BaseModel):
     name: str
     email: str
     role: str
-    created_time: datetime
+    created_at: datetime
 
 
 class RequestModel(BaseModel):

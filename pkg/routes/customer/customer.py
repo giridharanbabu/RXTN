@@ -142,3 +142,32 @@ async def user_login(request: Request):
     else:
         payload = jwt.decode(access_token, settings.SECRET, algorithms=[settings.ALGORITHM])
         return payload
+
+
+# List partners route
+@customer_router.get("/partners", response_model=List[Customer])
+async def list_partners(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+
+        user = user_collection.find_one({'email': payload["email"]})
+        if user['role'] in ['org-admin', "admin"]:
+            if user:
+                customers_cursor = customers_collection.find()
+                customers = []
+                for customer in customers_cursor:
+                    customers.append(Customer(
+                        id=str(customer['_id']),
+                        name=customer['name'],
+                        email=customer['email'],
+                        role=customer['role'],
+                        partner=customer['partner_id'],
+                        created_at=customer['created_at']
+                    ))
+                return customers
+            else:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view Customer")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")

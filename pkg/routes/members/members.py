@@ -156,3 +156,30 @@ async def edit_member(member: Members, token: str = Depends(val_token)):
                                 detail='No permission to Edit User')
     else:
         raise HTTPException(status_code=401, detail=token)
+
+
+# List partners route
+@members_router.get("/partners", response_model=List[Members])
+async def list_partners(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'email': payload["email"]})
+        if user['role'] in ['org-admin', "admin"]:
+            if user:
+                partners_cursor = members_collection.find()
+                partners = []
+                for partner in partners_cursor:
+                    partners.append(Members(
+                        id=str(partner['_id']),
+                        name=partner['name'],
+                        email=partner['email'],
+                        role=partner['role'],
+                        created_at=partner['created_at']
+                    ))
+                return partners
+            else:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view Customer")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")

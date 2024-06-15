@@ -11,6 +11,7 @@ class Customer(BaseModel):
     phone: str
     partner_id: str or None
     created_at: datetime
+    role: str or None = None
 
 
 class EditCustomer(BaseModel):
