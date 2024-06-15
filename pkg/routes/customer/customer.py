@@ -100,7 +100,10 @@ async def update_customer(edit_customer: EditCustomer, token: str = Depends(val_
 @customer_router.post('/customer/login')
 async def login(payload: LoginCustomerSchema, response: Response):
     # Check if the user exist
-    db_user = customers_collection.find_one({'email': payload.email.lower(), 'partner_id': payload.partner_id})
+    if payload.partner_id is None:
+        db_user = customers_collection.find_one({'email': payload.email.lower()})
+    else:
+        db_user = customers_collection.find_one({'email': payload.email.lower(), 'partner_id': payload.partner_id})
     if not db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail='User does not Registered')
