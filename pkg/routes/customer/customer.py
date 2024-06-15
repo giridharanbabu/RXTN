@@ -160,8 +160,9 @@ async def list_customers(token: str = Depends(val_token)):
                         id=str(customer['_id']),
                         name=customer['name'],
                         email=customer['email'],
+                        phone=customer['phone'],
                         role=customer['role'],
-                        partner=customer['partner_id'],
+                        partner_id=customer['partner_id'],
                         created_at=customer['created_at']
                     ))
                 return customers

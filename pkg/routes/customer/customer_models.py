@@ -9,7 +9,7 @@ class Customer(BaseModel):
     name: str
     email: str
     phone: str
-    partner_id: str or None
+    partner_id: list or None
     created_at: datetime
     role: str or None = None
 
