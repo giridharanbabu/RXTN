@@ -145,8 +145,8 @@ async def user_login(request: Request):
 
 
 # List partners route
-@customer_router.get("/partners", response_model=List[Customer])
-async def list_partners(token: str = Depends(val_token)):
+@customer_router.get("/customers", response_model=List[Customer])
+async def list_customers(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
 
