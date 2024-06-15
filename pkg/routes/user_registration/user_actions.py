@@ -207,3 +207,4 @@ async def update_user(token: str = Depends(val_token)):
 
     else:
         raise HTTPException(status_code=401, detail=token)
+

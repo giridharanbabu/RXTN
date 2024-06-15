@@ -1,8 +1,7 @@
 import json
-
 import bson
-from fastapi import HTTPException, status, APIRouter, Depends, Response
-
+import jwt
+from fastapi import HTTPException, status, APIRouter, Depends, Response, Request
 from config.config import settings
 from pkg.routes.customer.customer_models import *
 from pkg.database.database import database
@@ -123,7 +122,7 @@ async def login(payload: LoginCustomerSchema, response: Response):
     refresh_token = user_utils.create_access_token(user['email'], user['name'], 'Customer')
 
     # Store refresh and access tokens in cookie
-    response.set_cookie('access_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,
+    response.set_cookie('rxtn_customer_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,
                         ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, False, True, 'lax')
     response.set_cookie('refresh_token', refresh_token,
                         REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, False, True, 'lax')
@@ -132,3 +131,14 @@ async def login(payload: LoginCustomerSchema, response: Response):
 
     # Send both access
     return {'status': 'success', 'user': user['name'], 'access_token': access_token}
+
+
+@customer_router.get("/customer/me")
+async def user_login(request: Request):
+    """login session"""
+    access_token = request.cookies.get("access_token")
+    if access_token is None:
+        raise HTTPException(status_code=400, detail="Token not found in cookies")
+    else:
+        payload = jwt.decode(access_token, settings.SECRET, algorithms=[settings.ALGORITHM])
+        return payload
