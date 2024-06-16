@@ -30,28 +30,41 @@ def existing_customer(details):
 
 async def customer_register(details):
     partners = []
-    partner_details = []
-    if details['partner_id']:
-        partner_details = member_collections.find_one({"_id": ObjectId(str(details['partner_id']))})
-        if not partner_details:
-            raise HTTPException(status_code=404,
-                                detail=f" Invalid Partner Id {details['partner_id']}")
+    partner_details = None
 
-    elif details['partner_id'] not in details or len(details['partner_id']) == 0:
+    # Ensure 'partner_id' is present in details and is a non-empty string
+    if 'partner_id' in details and details['partner_id']:
+        print(len(details['partner_id']))  # This line might raise an error if partner_id is not a string
+        partner_details = member_collections.find_one({"_id": ObjectId(details['partner_id'])})
+        details['partner_id'] = [partner_details['_id']]
+        details['User_ids'] = partner_details.get('User_ids', [])
+        if not partner_details:
+            raise HTTPException(status_code=404, detail=f"Invalid Partner Id {details['partner_id']}")
+    else:
+        # If 'partner_id' is not provided or is empty
         partner_details = partner_details
 
+    # Generate and hash a temporary password
     temp_password = generate_temp_password()
     hashed_temp_password = hash_password(temp_password)
     details['password'] = hashed_temp_password
 
-    if partner_details:
-        details['partner_id'] = [partner_details['_id']]
-        details['User_ids'] = partner_details['User_ids']
+    # # Update details with partner information if available
+    # if partner_details:
+    #     details['partner_id'] = [partner_details['_id']]
+    #     details['User_ids'] = partner_details.get('User_ids', [])
+
+    # Insert details into the customers collection
     result = customers_collection.insert_one(details)
+
+    # Send an email with the temporary password
     await Email(temp_password, details['email'], 'customer_register').send_email()
+
     if result.inserted_id:
-        return {"status": f"New Customer- {details['name']} added",
-                'message': 'Temporary password successfully sent to your email'}
+        return {
+            "status": f"New Customer - {details['name']} added",
+            "message": "Temporary password successfully sent to your email"
+        }
     else:
         raise HTTPException(status_code=500, detail="Failed to insert data")
 

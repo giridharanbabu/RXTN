@@ -1,6 +1,5 @@
 from datetime import date, datetime, time, timedelta
 from typing import List, Optional
-from typing import List
 from pydantic import BaseModel, EmailStr, constr
 from bson.objectid import ObjectId
 
@@ -9,7 +8,7 @@ class Customer(BaseModel):
     name: str
     email: str
     phone: str
-    partner_id: list or None
+    partner_id: Optional[list] or None
     created_at: datetime
     role: str or None = None
 
