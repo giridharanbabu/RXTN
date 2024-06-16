@@ -1,6 +1,7 @@
 import json
 import bson
 import jwt
+from bson import json_util
 from fastapi import HTTPException, status, APIRouter, Depends, Response, Request
 from config.config import settings
 from pkg.routes.customer.customer_models import *
@@ -185,3 +186,20 @@ async def list_customers(token: str = Depends(val_token)):
             raise HTTPException(status_code=401, detail="User does not have access to view Customer")
     else:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@customer_router.get("/customer/info", response_model=CustomerResponse)
+async def update_user(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        customer = customers_collection.find_one({'email': payload["email"]})
+
+        if customer:
+            customer['created_at'] = str(customer['created_at'])
+            return json.loads(json_util.dumps(customer))
+        # Check if the user is found and updated
+        else:
+            raise HTTPException(status_code=404, detail="Customer not found")
+
+    else:
+        raise HTTPException(status_code=401, detail=token)
