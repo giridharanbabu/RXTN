@@ -14,15 +14,15 @@ class Customer(BaseModel):
 
 
 class EditCustomer(BaseModel):
-    name: str or None = None
-    email: str
-    phone: str or None = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class LoginCustomerSchema(BaseModel):
     email: EmailStr
     password: constr(min_length=8)
-    partner_id: list or None= None
+    partner_id: list or None = None
 
 
 class CustomerResponse(BaseModel):
@@ -32,3 +32,7 @@ class CustomerResponse(BaseModel):
     partner_id: Optional[list] or None
     created_at: str
     role: str or None = None
+
+
+class AdminApprovalRequest(BaseModel):
+    approve: bool
