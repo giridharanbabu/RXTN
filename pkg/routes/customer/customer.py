@@ -197,6 +197,7 @@ async def update_user(token: str = Depends(val_token)):
         customer = customers_collection.find_one({'email': payload["email"]})
 
         if customer:
+            customer['id'] = str(customer['_id'])
             customer['created_at'] = str(customer['created_at'])
             return json.loads(json_util.dumps(customer))
         # Check if the user is found and updated
