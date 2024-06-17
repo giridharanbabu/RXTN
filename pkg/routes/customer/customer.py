@@ -133,14 +133,13 @@ async def login(payload: LoginCustomerSchema, response: Response):
                             detail='Incorrect Email or Password')
 
     # Create access token
-    access_token = user_utils.create_refresh_token(user['email'], user['name'], 'Customer')
-
+    access_token = user_utils.create_access_token(user['email'], user['name'], 'Customer')
     # Create refresh token
-    refresh_token = user_utils.create_access_token(user['email'], user['name'], 'Customer')
+    refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'Customer')
 
     # Store refresh and access tokens in cookie
-    response.set_cookie('rxtn_customer_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,
-                        ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
+    response.set_cookie('rxtn_customer_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
+                        ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
     response.set_cookie('refresh_token', refresh_token,
                         REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
     response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
