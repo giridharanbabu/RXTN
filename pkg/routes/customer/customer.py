@@ -152,7 +152,7 @@ async def login(payload: LoginCustomerSchema, response: Response):
 @customer_router.get("/customer/me")
 async def user_login(request: Request):
     """login session"""
-    access_token = request.cookies.get("access_token")
+    access_token = request.cookies.get("rxtn_customer_token")
     if access_token is None:
         raise HTTPException(status_code=400, detail="Token not found in cookies")
     else:
