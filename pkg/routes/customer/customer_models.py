@@ -37,3 +37,20 @@ class CustomerResponse(BaseModel):
 
 class AdminApprovalRequest(BaseModel):
     approve: bool
+
+
+# Define the model for password reset
+class PasswordResetRequest(BaseModel):
+    email: str
+    current_password: str
+    new_password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyOtpRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
