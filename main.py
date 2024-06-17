@@ -14,6 +14,8 @@ app = FastAPI()
 
 # CORS url
 origins = [
+   "http://localhost:3000",  # Local development frontend
+    "https://rxtn.onrender.com",  # Production backend
     '*'
 ]
 
