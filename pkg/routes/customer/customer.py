@@ -167,7 +167,7 @@ async def list_customers(token: str = Depends(val_token)):
         payload = token[1]
 
         user = user_collection.find_one({'email': payload["email"]})
-        if user['role'] in ['org-admin', "admin"]:
+        if user['payload'] in ['org-admin', "admin"]:
             if user:
                 customers_cursor = customers_collection.find()
                 customers = []
@@ -372,3 +372,47 @@ async def verify_otp(request: VerifyOtpRequest):
     )
 
     return {"message": "Password reset successfully"}
+
+
+@customer_router.post("/customer/logout")
+def logout(response: Response):
+    # Clear the access token
+    response.set_cookie(
+        key="rxtn_customer_token",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        domain=None,
+        secure=True,  # Set to False for development over HTTP
+        httponly=True,
+        samesite="none"
+    )
+
+    # Clear the refresh token
+    response.set_cookie(
+        key="refresh_token",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        domain=None,
+        secure=True,  # Set to False for development over HTTP
+        httponly=True,
+        samesite="none"
+    )
+
+    # Clear the logged_in indicator
+    response.set_cookie(
+        key="logged_in",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        domain=None,
+        secure=True,  # Can be False if the logged_in cookie isn't critical
+        httponly=False,  # Allow JavaScript access if needed
+        samesite="none"
+    )
+
+    return {"message": "Logged out successfully"}

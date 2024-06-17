@@ -6,7 +6,8 @@ from random import randbytes
 from bson import json_util
 from fastapi import HTTPException, status, APIRouter, Request, Depends, Response
 from jose import jwt
-from pkg.routes.user_registration.user_models import CreateUserSchema, LoginUserSchema, PasswordResetRequest, UserReponse
+from pkg.routes.user_registration.user_models import CreateUserSchema, LoginUserSchema, PasswordResetRequest, \
+    UserReponse
 from pkg.database.database import database
 from pkg.routes.authentication import val_token, verify_otp
 from pkg.routes.user_registration import user_utils
@@ -103,7 +104,7 @@ async def login(payload: LoginUserSchema, response: Response):
 
     # Store refresh and access tokens in cookie
     response.set_cookie('access_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,
-                        ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, False, True, 'lax')
+                        ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
     response.set_cookie('refresh_token', refresh_token,
                         REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, False, True, 'lax')
     response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
@@ -126,26 +127,26 @@ async def user_login(request: Request):
 
 @user_router.post("/edit/users")
 async def update_user(new_data: dict, token: str = Depends(val_token)):
-        if token[0] is True:
-            payload = token[1]
+    if token[0] is True:
+        payload = token[1]
 
-            user = user_collection.find_one({'email': payload["email"]})
-            if user['role'] == ['org-admin', "admin"]:
-                if user:
-                    # Update the user data in MongoDB
-                    result = user_collection.update_one({"_id": user["_id"]}, {"$set": new_data})
-                    print(result)
-                # Check if the user is found and updated
-                else:
-                    raise HTTPException(status_code=404, detail="User not found")
-
-                return {"message": "User updated successfully"}
-
+        user = user_collection.find_one({'email': payload["email"]})
+        if user['role'] == ['org-admin', "admin"]:
+            if user:
+                # Update the user data in MongoDB
+                result = user_collection.update_one({"_id": user["_id"]}, {"$set": new_data})
+                print(result)
+            # Check if the user is found and updated
             else:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                    detail='No permission to Edit User')
+                raise HTTPException(status_code=404, detail="User not found")
+
+            return {"message": "User updated successfully"}
+
         else:
-            raise HTTPException(status_code=401, detail="Does not have Permission to Edit")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='No permission to Edit User')
+    else:
+        raise HTTPException(status_code=401, detail="Does not have Permission to Edit")
 
 
 @user_router.post("/request-reset-password/")
@@ -208,3 +209,46 @@ async def update_user(token: str = Depends(val_token)):
     else:
         raise HTTPException(status_code=401, detail=token)
 
+
+@user_router.post("/user/logout")
+def logout(response: Response):
+    # Clear the access token
+    response.set_cookie(
+        key="access_token",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        domain=None,
+        secure=True,  # Set to False for development over HTTP
+        httponly=True,
+        samesite="none"
+    )
+
+    # Clear the refresh token
+    response.set_cookie(
+        key="refresh_token",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        domain=None,
+        secure=True,  # Set to False for development over HTTP
+        httponly=True,
+        samesite="none"
+    )
+
+    # Clear the logged_in indicator
+    response.set_cookie(
+        key="logged_in",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        domain=None,
+        secure=True,  # Can be False if the logged_in cookie isn't critical
+        httponly=False,  # Allow JavaScript access if needed
+        samesite="none"
+    )
+
+    return {"message": "Logged out successfully"}

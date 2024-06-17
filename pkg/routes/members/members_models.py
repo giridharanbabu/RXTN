@@ -34,3 +34,9 @@ class CreateMemberSchema(MemberBaseSchema):
     password: constr(min_length=8)
     passwordConfirm: str
     verified: bool = False
+
+
+class LoginMemberSchema(BaseModel):
+    email: EmailStr
+    password: constr(min_length=8)
+

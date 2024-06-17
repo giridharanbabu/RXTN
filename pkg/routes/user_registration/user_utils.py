@@ -5,6 +5,7 @@ from jose import jwt, JWTError
 from typing import Union, Any
 from config.config import settings
 from pkg.database.database import database
+
 user_collection = database.get_collection('users')
 
 pwd_context = CryptContext(["sha256_crypt"])
@@ -20,14 +21,30 @@ def verify_password(password: str, hashed_password: str):
     return pwd_context.verify(password, hashed_password)
 
 
-def create_access_token(subject: Union[str, Any], name: str, role: str, expires_delta: int = None) -> str:
-    if expires_delta is not None:
-        expires_delta = datetime.utcnow() + expires_delta
-    else:
-        expires_delta = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+# def create_access_token(subject: Union[str, Any], name: str, role: str, expires_delta: int = None) -> str:
+#     print(expires_delta)
+#     if expires_delta is not None:
+#         expires_delta = datetime.now() + expires_delta
+#     else:
+#         expires_delta = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+#     print(expires_delta)
+#     to_encode = {"exp": expires_delta, "email": str(subject), "name": name, "role": role}
+#     encoded_jwt = jwt.encode(to_encode, settings.SECRET, settings.ALGORITHM)
+#     return encoded_jwt
 
-    to_encode = {"exp": expires_delta, "email": str(subject), "name": name, "role": role}
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET, settings.ALGORITHM)
+def create_access_token(subject: Union[str, Any], name: str, role: str, expires_delta: timedelta = None) -> str:
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    to_encode = {
+        "exp": expire,
+        "email": str(subject),
+        "name": name,
+        "role": role
+    }
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 
@@ -57,7 +74,7 @@ def validate_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, settings.SECRET, algorithms=["HS256"])
         # Check if the token has expired
-        if datetime.utcnow() > datetime.fromtimestamp(payload["exp"]):
+        if datetime.now() > datetime.fromtimestamp(payload["exp"]):
             raise jwt.ExpiredSignatureError("Token has expired")
         return payload
     except jwt.ExpiredSignatureError:

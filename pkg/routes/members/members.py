@@ -1,13 +1,17 @@
-from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends
+from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends, Response
+
+from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPasswordRequest
 from pkg.routes.members.members_models import *
+from pkg.routes.serializers.userSerializers import customerEntity
 from pkg.routes.user_registration import user_utils
 from pkg.routes.customer.customer_utils import generate_temp_password, hash_password
 from pkg.database.database import database
-from pkg.routes.authentication import val_token
+from pkg.routes.authentication import val_token, verify_password
 from pkg.routes.emails import Email
 from random import randbytes
 import hashlib, base64
 from config.config import settings
+from pkg.routes.user_registration.user_utils import generate_otp
 
 members_router = APIRouter()
 members_collection = database.get_collection('partners')
@@ -104,7 +108,7 @@ async def create_member(member: Members, token: str = Depends(val_token)):
                         '$push': {'User_ids': find_user['_id']}
                     }, upsert=True)
                     return {"status": f"Partner- {details['name']} added",
-                        'message': 'Temporary password successfully sent to your email'}
+                            'message': 'Temporary password successfully sent to your email'}
             else:
                 raise HTTPException(status_code=500, detail="Failed to insert data")
 
@@ -164,7 +168,8 @@ async def list_partners(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         user = user_collection.find_one({'email': payload["email"]})
-        if user['role'] in ['org-admin', "admin"]:
+        print(user)
+        if payload['role'] in ['org-admin', "admin"]:
             if user:
                 partners_cursor = members_collection.find()
                 partners = []
@@ -183,3 +188,117 @@ async def list_partners(token: str = Depends(val_token)):
             raise HTTPException(status_code=401, detail="User does not have access to view Customer")
     else:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+# Routes
+@members_router.post("/member/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    member = members_collection.find_one({"email": request.email})
+
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    otp = generate_otp()
+    otp_expiration = datetime.now() + timedelta(minutes=10)  # OTP valid for 10 minutes
+    members_collection.update_one(
+        {"_id": member["_id"]},
+        {"$set": {"otp": otp, "otp_expires_at": otp_expiration}}
+    )
+    email_subject = "Password Reset OTP"
+    email_body = f"Your OTP for password reset is: <b>{otp}</b>. It is valid for 10 minutes."
+    await Email(otp['reset_otp'], request.email, 'reset', email_body).send_email()
+    return {"message": "OTP sent to your email"}
+
+
+@members_router.post("/member/verify-otp")
+async def verify_otp(request: VerifyOtpRequest):
+    member = members_collection.find_one({"email": request.email})
+
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    if member["otp"]['reset_otp'] != request.otp or member["otp_expires_at"] < datetime.now():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OTP")
+    new_hashed_password = hash_password(request.new_password)
+    members_collection.update_one(
+        {"_id": member["_id"]},
+        {"$set": {"password": new_hashed_password}, "$unset": {"otp": "", "otp_expires_at": ""}}
+    )
+    return {"message": "Password reset successfully"}
+
+
+@members_router.post('/member/login')
+async def login(payload: LoginMemberSchema, response: Response):
+    # Check if the user exist
+
+    db_user = members_collection.find_one({'email': payload.email.lower()})
+    if not db_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='User does not Registered')
+    user = customerEntity(db_user)
+    ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    REFRESH_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    # Check if user verified his email
+
+    if not verify_password(payload.password, user['password']):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='Incorrect Email or Password')
+
+    # Create access token
+    access_token = user_utils.create_access_token(user['email'], user['name'], 'Customer')
+    # Create refresh token
+    refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'Customer')
+
+    # Store refresh and access tokens in cookie
+    response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
+                        ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
+    response.set_cookie('refresh_token', refresh_token,
+                        REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
+    response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
+                        ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, False, 'none')
+
+    # Send both access
+    return {'status': 'success', 'user': user['name'], 'access_token': access_token}
+
+
+@members_router.post("/member/logout")
+def logout(response: Response):
+    # Clear the access token
+    response.set_cookie(
+        key="rxtn_member_token",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        domain=None,
+        secure=True,  # Set to False for development over HTTP
+        httponly=True,
+        samesite="none"
+    )
+
+    # Clear the refresh token
+    response.set_cookie(
+        key="refresh_token",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        domain=None,
+        secure=True,  # Set to False for development over HTTP
+        httponly=True,
+        samesite="none"
+    )
+
+    # Clear the logged_in indicator
+    response.set_cookie(
+        key="logged_in",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        domain=None,
+        secure=True,  # Can be False if the logged_in cookie isn't critical
+        httponly=False,  # Allow JavaScript access if needed
+        samesite="none"
+    )
+
+    return {"message": "Logged out successfully"}

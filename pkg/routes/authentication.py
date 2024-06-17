@@ -164,3 +164,21 @@ async def verify_me(token: str):
         "access_token": access_token,
         "message": "Account verified successfully"
     }
+
+
+@auth_router.get('/members/verifyemail/{token}')
+async def verify_partner(token: str):
+    register = database.get_collection('partners')
+
+    result = register.find_one_and_update({"verification_code": token}, {
+        "$set": {"verification_code": None, "verified": True, "updated_at": datetime.utcnow()}}, new=True)
+    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail='Invalid verification code or account already verified')
+
+    return {
+        "status": "success",
+        "access_token": access_token,
+        "message": "Account verified successfully"
+    }
