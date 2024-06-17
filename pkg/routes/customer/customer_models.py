@@ -32,7 +32,7 @@ class CustomerResponse(BaseModel):
     phone: str
     partner_id: Optional[list] or None
     created_at: str
-    role: str or None = None
+    role: Optional[str] or None = None
 
 
 class AdminApprovalRequest(BaseModel):
