@@ -18,3 +18,11 @@ def hash_password(password):
 def verify_password(plain_password, hashed_password):
     # Verify the plain password against the hashed password
     return hash_password(plain_password) == hashed_password
+
+
+def generate_html_message(changes: dict) -> str:
+    html_message = "<ul>"
+    for field, value in changes.items():
+        html_message += f"<li><strong>{field.capitalize()}:</strong> {value}</li>"
+    html_message += "</ul>"
+    return html_message

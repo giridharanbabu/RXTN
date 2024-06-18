@@ -1,11 +1,9 @@
 from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends, Response
-
-from pkg.routes.customer.customer import generate_html_message
 from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPasswordRequest, AdminApprovalRequest
 from pkg.routes.members.members_models import *
 from pkg.routes.serializers.userSerializers import customerEntity
 from pkg.routes.user_registration import user_utils
-from pkg.routes.customer.customer_utils import generate_temp_password, hash_password
+from pkg.routes.customer.customer_utils import generate_temp_password, hash_password, generate_html_message
 from pkg.database.database import database
 from pkg.routes.authentication import val_token, verify_password
 from pkg.routes.emails import Email
@@ -13,7 +11,6 @@ from random import randbytes
 import hashlib, base64
 from config.config import settings
 from pkg.routes.user_registration.user_utils import generate_otp
-
 members_router = APIRouter()
 members_collection = database.get_collection('partners')
 user_collection = database.get_collection('users')
