@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends, Response
 
-from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPasswordRequest
+from pkg.routes.customer.customer import generate_html_message
+from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPasswordRequest, AdminApprovalRequest
 from pkg.routes.members.members_models import *
 from pkg.routes.serializers.userSerializers import customerEntity
 from pkg.routes.user_registration import user_utils
@@ -115,51 +116,136 @@ async def create_member(member: Members, token: str = Depends(val_token)):
     else:
         raise HTTPException(status_code=401, detail=token)
 
+#
+# @members_router.post("/edit/request")
+# async def edit_request(requestmodel: RequestModel):
+#     request_details = requestmodel.dict()
+#     member = members_collection.find_one({'_id': ObjectId(requestmodel.partner_id)})
+#     if member:
+#         request_details['User_ids'] = member['User_ids']
+#         result = members_collection.insert_one(request_details)
+#         if result:
+#             for users in member['User_ids']:
+#                 users_detail = user_collection.find_one({'_id': ObjectId(users)})
+#                 email_body = {'name': member['name'], 'fields': request_details['request_fields']}
+#                 await Email('Profile Edit Request', users_detail['email'], 'edit_request', email_body).send_email()
+#             return {'status': 'success', 'message': 'Request sent successfully'}
+#         else:
+#             raise HTTPException(status_code=500, detail="Failed to insert data")
+#     else:
+#         raise HTTPException(status_code=404, detail="Partner Not Found")
 
-@members_router.post("/edit/request")
-async def edit_request(requestmodel: RequestModel):
-    request_details = requestmodel.dict()
-    member = members_collection.find_one({'_id': ObjectId(requestmodel.partner_id)})
-    if member:
-        request_details['User_ids'] = member['User_ids']
-        result = members_collection.insert_one(request_details)
-        if result:
-            for users in member['User_ids']:
-                users_detail = user_collection.find_one({'_id': ObjectId(users)})
-                email_body = {'name': member['name'], 'fields': request_details['request_fields']}
-                await Email('Profile Edit Request', users_detail['email'], 'edit_request', email_body).send_email()
-            return {'status': 'success', 'message': 'Request sent successfully'}
-        else:
-            raise HTTPException(status_code=500, detail="Failed to insert data")
-    else:
-        raise HTTPException(status_code=404, detail="Partner Not Found")
+
+#
+# @members_router.post("/edit/partner")
+# async def edit_member(member: Members, token: str = Depends(val_token)):
+#     if token[0] is True:
+#         payload = token[1]
+#         user = user_collection.find_one({'email': payload["email"]})
+#         print(user['role'])
+#         if user['role'] in ['org-admin', 'admin']:
+#             details = member.dict()
+#             # members_collection = database.get_collection('members')
+#             member = members_collection.find_one({'email': details["email"]})
+#             details['updated_time'] = datetime.utcnow()
+#             if member:
+#                 # if member['role'] == 'admin' or member['role'] == 'user':
+#                 result = members_collection.update_one({"_id": member["_id"]}, {"$set": details})
+#                 if result:
+#                     return {"message": "Partner updated successfully"}
+#                 else:
+#                     raise HTTPException(status_code=500, detail="Failed to insert data")
+#                 # else:
+#                 #     raise HTTPException(status_code=401, detail='User does not have permission to update')
+#             else:
+#                 raise HTTPException(status_code=409, detail=f"{member['email']} does not  Exists")
+#         else:
+#             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+#                                 detail='No permission to Edit User')
+#     else:
+#         raise HTTPException(status_code=401, detail=token)
 
 
 @members_router.post("/edit/partner")
-async def edit_member(member: Members, token: str = Depends(val_token)):
+async def update_partner(member: Members, token: str = Depends(val_token)):
     if token[0] is True:
-        user = user_collection.find_one({'email': payload["email"]})
-        if user['role'] in ['org-admin', 'admin']:
-            details = member.dict()
-            # members_collection = database.get_collection('members')
+        payload = token[1]
+        edit_members = member.dict(exclude_none=True)
+        if edit_members['role'] in ['org-admin', 'admin']:
             member = members_collection.find_one({'email': details["email"]})
-            details['updated_time'] = datetime.utcnow()
-            if member:
-                if member['role'] == 'admin' or member['role'] == 'user':
-                    result = members_collection.update_one({"_id": member["_id"]}, {"$set": details})
-                    if result:
-                        return {"message": "Partner updated successfully"}
-                    else:
-                        raise HTTPException(status_code=500, detail="Failed to insert data")
-                else:
-                    raise HTTPException(status_code=401, detail='User does not have permission to update')
-            else:
-                raise HTTPException(status_code=409, detail=f"{member['email']} does not  Exists")
+            edit_members['updated_at'] = datetime.utcnow()
+            result = members_collection.update_one({"_id": member["_id"]}, {"$set": edit_members})
+            if result:
+                return {"message": "Partner updated successfully"}
         else:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail='No permission to Edit User')
+            member = members_collection.find_one({'email': payload["email"]})
+            print(member)
+            if member:
+                edit_members['pending_changes'] = {
+                    **edit_members,
+                    'updated_at': datetime.utcnow()
+                }
+                result = members_collection.update_one(
+                    {'_id': member['_id']},
+                    {'$set': {'pending_changes': edit_members['pending_changes']}}
+                )
+
+                if result.modified_count == 0:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                        detail=f'Unable to queue update for this customer.')
+
+                # Notify admin about pending changes
+                customer_request = {'name': member['email'], 'fields': str(edit_members['pending_changes'])}
+                edit_members['pending_changes'].pop('updated_at')
+                message = generate_html_message(edit_members['pending_changes'])
+                print(message)
+                admin_email = "giri1208srinivas@gmail.com"
+                subject = f"Approval Required: Changes to Customer {member['email']}"
+                body = f"Pending changes for customer:\n\n{edit_members['pending_changes']}"
+
+                await Email(subject, admin_email, 'customer_request', message).send_email()
+                return {'status': f'Partner update queued for approval - {member["name"]}'}
+
+            else:
+                raise HTTPException(status_code=404, detail=f"Customer {edit_members['email']} does not exist")
+
     else:
         raise HTTPException(status_code=401, detail=token)
+
+
+@members_router.post("/admin/approve/{partner_id}")
+async def approve_customer_edit(customer_id: str, approval: AdminApprovalRequest):
+    if not ObjectId.is_valid(customer_id):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+
+    customer = members_collection.find_one({'_id': ObjectId(customer_id)})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    pending_changes = customer.get('pending_changes')
+    if not pending_changes:
+        raise HTTPException(status_code=404, detail="No pending changes found")
+
+    if approval.approve:
+        # Apply the changes
+        result = members_collection.update_one(
+            {'_id': ObjectId(customer_id)},
+            {'$set': pending_changes, '$unset': {'pending_changes': ""}}
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=500, detail="Failed to apply changes.")
+        message = "Changes approved and applied successfully."
+    else:
+        # Discard the changes
+        result = members_collection.update_one(
+            {'_id': ObjectId(customer_id)},
+            {'$unset': {'pending_changes': ""}}
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=500, detail="Failed to discard changes.")
+        message = "Changes rejected and discarded."
+
+    return {'message': message}
 
 
 # List partners route
@@ -168,7 +254,6 @@ async def list_partners(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         user = user_collection.find_one({'email': payload["email"]})
-        print(user)
         if payload['role'] in ['org-admin', "admin"]:
             if user:
                 partners_cursor = members_collection.find()
