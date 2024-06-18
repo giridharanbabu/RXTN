@@ -168,15 +168,17 @@ async def update_partner(member: Members, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         edit_members = member.dict(exclude_none=True)
-        if edit_members['role'] in ['org-admin', 'admin']:
-            member = members_collection.find_one({'email': details["email"]})
+        if payload['role'] in ['org-admin', 'admin']:
+            member = members_collection.find_one({'email': edit_members["email"]})
             edit_members['updated_at'] = datetime.utcnow()
+            edit_members.pop('role')
             result = members_collection.update_one({"_id": member["_id"]}, {"$set": edit_members})
             if result:
                 return {"message": "Partner updated successfully"}
         else:
-            member = members_collection.find_one({'email': payload["email"]})
+            member = members_collection.find_one({'email': edit_members["email"]})
             print(member)
+            edit_members.pop('role')
             if member:
                 edit_members['pending_changes'] = {
                     **edit_members,
@@ -204,7 +206,7 @@ async def update_partner(member: Members, token: str = Depends(val_token)):
                 return {'status': f'Partner update queued for approval - {member["name"]}'}
 
             else:
-                raise HTTPException(status_code=404, detail=f"Customer {edit_members['email']} does not exist")
+                raise HTTPException(status_code=404, detail=f"Partner {edit_members['email']} does not exist")
 
     else:
         raise HTTPException(status_code=401, detail=token)
