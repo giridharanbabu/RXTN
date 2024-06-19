@@ -167,7 +167,7 @@ async def list_customers(token: str = Depends(val_token)):
         payload = token[1]
 
         user = user_collection.find_one({'email': payload["email"]})
-        if user['payload'] in ['org-admin', "admin"]:
+        if user['role'] in ['org-admin', "admin"]:
             if user:
                 customers_cursor = customers_collection.find()
                 customers = []
