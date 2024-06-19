@@ -32,21 +32,23 @@ def existing_customer(details):
 
 
 async def customer_register(details):
-    partners = []
-    partner_details = None
-
+    # partners = []
+    # partner_details = None
+    if 'partner_id' not in details:
+        details['partner_id'] = []
     # Ensure 'partner_id' is present in details and is a non-empty string
-    if 'partner_id' in details and details['partner_id']:
-        print(len(details['partner_id']))  # This line might raise an error if partner_id is not a string
-        partner_details = member_collections.find_one({"_id": ObjectId(details['partner_id'])})
-        details['partner_id'] = [partner_details['_id']]
-        details['User_ids'] = partner_details.get('User_ids', [])
-        if not partner_details:
-            raise HTTPException(status_code=404, detail=f"Invalid Partner Id {details['partner_id']}")
-    else:
-        # If 'partner_id' is not provided or is empty
-        partner_details = partner_details
-
+    # if 'partner_id' in details and details['partner_id']:
+    #     print(len(details['partner_id']))  # This line might raise an error if partner_id is not a string
+    #     for partners in details['partner_id']:
+    #         partner_details = member_collections.find_one({"_id": ObjectId(partners)})
+    #         details['partner_id'] = [partner_details['_id']]
+    #         details['User_ids'] = partner_details.get('User_ids', [])
+    #         if not partner_details:
+    #             raise HTTPException(status_code=404, detail=f"Invalid Partner Id {details['partner_id']}")
+    # else:
+    #     # If 'partner_id' is not provided or is empty
+    #     partner_details = partner_details
+    details['role'] = "customer"
     # Generate and hash a temporary password
     temp_password = generate_temp_password()
     hashed_temp_password = hash_password(temp_password)
