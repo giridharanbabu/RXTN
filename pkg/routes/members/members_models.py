@@ -40,3 +40,10 @@ class LoginMemberSchema(BaseModel):
     email: EmailStr
     password: constr(min_length=8)
 
+
+class MembersResponse(BaseModel):
+    id :str
+    name: str
+    email: str
+    role: str
+    created_at: datetime

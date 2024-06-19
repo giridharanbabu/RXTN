@@ -248,7 +248,7 @@ async def approve_customer_edit(customer_id: str, approval: AdminApprovalRequest
 
 
 # List partners route
-@members_router.get("/partners", response_model=List[Members])
+@members_router.get("/partners", response_model=List[MembersResponse])
 async def list_partners(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
@@ -258,7 +258,7 @@ async def list_partners(token: str = Depends(val_token)):
                 partners_cursor = members_collection.find()
                 partners = []
                 for partner in partners_cursor:
-                    partners.append(Members(
+                    partners.append(MembersResponse(
                         id=str(partner['_id']),
                         name=partner['name'],
                         email=partner['email'],
