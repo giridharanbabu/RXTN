@@ -31,7 +31,7 @@ class CustomerResponse(BaseModel):
     email: str
     phone: str
     partner_id: Optional[list] or None
-    created_at: str
+    created_at: datetime
     role: Optional[str] or None = None
 
 

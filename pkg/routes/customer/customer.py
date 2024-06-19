@@ -161,18 +161,19 @@ async def user_login(request: Request):
 
 
 # List partners route
-@customer_router.get("/customers", response_model=List[Customer])
+@customer_router.get("/customers", response_model=List[CustomerResponse])
 async def list_customers(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
 
         user = user_collection.find_one({'email': payload["email"]})
-        if user['role'] in ['org-admin', "admin"]:
+        if payload['role'] in ['org-admin', "admin"]:
             if user:
                 customers_cursor = customers_collection.find()
                 customers = []
                 for customer in customers_cursor:
-                    customers.append(Customer(
+                    print(customer)
+                    customers.append(CustomerResponse(
                         id=str(customer['_id']),
                         name=customer['name'],
                         email=customer['email'],
