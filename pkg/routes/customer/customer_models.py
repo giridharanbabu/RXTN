@@ -8,25 +8,25 @@ class Customer(BaseModel):
     name: str
     email: str
     phone: str
-    partner_id: Optional[list] or None
+    partner_id: Optional[list] or None = []
     created_at: datetime or None or ''
     role: str or None = None
-    secondary_contact: Optional[str] or None
-    gender: Optional[str] or None
-    date_of_birth: Optional[str] or None
-    address: Optional[str] or None
-    annual_income: Optional[int] or None
-    source_of_income: Optional[str] or None
-    marital_status: Optional[str] or None
-    pan_number: Optional[str] or None
-    aadhaar_number: Optional[str] or None
-    no_of_dependants: Optional[str] or None
-    current_city: Optional[str] or None
-    educational_qualification: Optional[str] or None
-    permanent_address: Optional[str] or None
-    nominee_name: Optional[str] or None
-    nominee_relationship: Optional[str] or None
-    nominee_dob: Optional[str] or None
+    secondary_contact: Optional[str] or None = None
+    gender: Optional[str] or None = None
+    date_of_birth: Optional[str] or None = None
+    address: Optional[str] or None = None
+    annual_income: Optional[int] or None = None
+    source_of_income: Optional[str] or None = None
+    marital_status: Optional[str] or None = None
+    pan_number: Optional[str] or None = None
+    aadhaar_number: Optional[str] or None = None
+    no_of_dependants: Optional[str] or None = None
+    current_city: Optional[str] or None = None
+    educational_qualification: Optional[str] or None = None
+    permanent_address: Optional[str] or None = None
+    nominee_name: Optional[str] or None = None
+    nominee_relationship: Optional[str] or None = None
+    nominee_dob: Optional[str] or None = None
 
 
 class EditCustomer(BaseModel):
