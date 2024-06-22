@@ -33,6 +33,7 @@ class EditCustomer(BaseModel):
     name: Optional[str] or None = None
     email: Optional[str] or None = None
     phone: Optional[str] or None = None
+    partner_id: Optional[list] or None = []
     secondary_contact: Optional[str] or None = None
     gender: Optional[str] or None = None
     date_of_birth: Optional[str] or None = None
@@ -62,7 +63,7 @@ class CustomerResponse(BaseModel):
     name: str
     email: str
     phone: str
-    partner_id: Optional[list] or None
+    partner_id: Optional[list] or None = []
     created_at: datetime
     role: Optional[str] or None = None
     secondary_contact: Optional[str] or None = None
