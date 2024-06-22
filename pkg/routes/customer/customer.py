@@ -219,12 +219,12 @@ def generate_html_message(changes: dict) -> str:
 async def update_customer(edit_customer: EditCustomer, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
+
         customer_collection = database.get_collection('customers')
         edit_customer = edit_customer.dict(exclude_none=True)
         if payload['role'] in ['org-admin', 'admin']:
             customer = customer_collection.find_one({'email': edit_customer["email"]})
             edit_customer['updated_at'] = datetime.utcnow()
-            edit_customer.pop('role')
             result = customer_collection.update_one({"_id": customer["_id"]}, {"$set": edit_customer})
             if result:
                 return {"message": "Partner updated successfully"}
