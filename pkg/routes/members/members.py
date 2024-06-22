@@ -3,9 +3,9 @@ from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPassword
 from pkg.routes.members.members_models import *
 from pkg.routes.serializers.userSerializers import customerEntity
 from pkg.routes.user_registration import user_utils
-from pkg.routes.customer.customer_utils import generate_temp_password, hash_password, generate_html_message
+from pkg.routes.customer.customer_utils import generate_temp_password, hash_password, generate_html_message, verify_password
 from pkg.database.database import database
-from pkg.routes.authentication import val_token, verify_password
+from pkg.routes.authentication import val_token
 from pkg.routes.emails import Email
 from random import randbytes
 import hashlib, base64
