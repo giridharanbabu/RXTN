@@ -221,7 +221,7 @@ async def update_customer(edit_customer: EditCustomer, token: str = Depends(val_
         payload = token[1]
         edit_customer = edit_customer.dict(exclude_none=True)
         customer_collection = database.get_collection('customers')
-        customer = customer_collection.find_one({'email': payload["email"]})
+        customer = customer_collection.find_one({'email': edit_customer["email"]})
         print(customer)
         if customer:
             edit_customer['pending_changes'] = {
