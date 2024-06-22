@@ -219,41 +219,50 @@ def generate_html_message(changes: dict) -> str:
 async def update_customer(edit_customer: EditCustomer, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
-        edit_customer = edit_customer.dict(exclude_none=True)
         customer_collection = database.get_collection('customers')
-        customer = customer_collection.find_one({'email': edit_customer["email"]})
-        print(customer)
-        if customer:
-            edit_customer['pending_changes'] = {
-                **edit_customer,
-                'updated_at': datetime.utcnow()
-            }
-            result = customer_collection.update_one(
-                {'_id': customer['_id']},
-                {'$set': {'pending_changes': edit_customer['pending_changes']}}
-            )
-
-            if result.modified_count == 0:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                    detail=f'Unable to queue update for this customer.')
-
-            # Notify admin about pending changes
-            customer_request = {'name': customer['email'], 'fields': str(edit_customer['pending_changes'])}
-            edit_customer['pending_changes'].pop('updated_at')
-            message = generate_html_message(edit_customer['pending_changes'])
-            print(message)
-            admin_email = "giri1208srinivas@gmail.com"
-            subject = f"Approval Required: Changes to Customer {customer['email']}"
-            body = f"Pending changes for customer:\n\n{edit_customer['pending_changes']}"
-            if customer['partner_id']:
-                for partner in customer['partner_id']:
-                    member = members_collection.find_one({'_id': ObjectId(partner)})
-                    await Email(subject, member['email'], 'customer_request', message).send_email()
-
-            await Email(subject, admin_email, 'customer_request', message).send_email()
-
+        edit_customer = edit_customer.dict(exclude_none=True)
+        if payload['role'] in ['org-admin', 'admin']:
+            customer = customer_collection.find_one({'email': edit_customer["email"]})
+            edit_customer['updated_at'] = datetime.utcnow()
+            edit_customer.pop('role')
+            result = customer_collection.update_one({"_id": customer["_id"]}, {"$set": edit_customer})
+            if result:
+                return {"message": "Partner updated successfully"}
         else:
-            raise HTTPException(status_code=404, detail=f"Customer {edit_customer['email']} does not exist")
+
+            customer = customer_collection.find_one({'email': edit_customer["email"]})
+            print(customer)
+            if customer:
+                edit_customer['pending_changes'] = {
+                    **edit_customer,
+                    'updated_at': datetime.utcnow()
+                }
+                result = customer_collection.update_one(
+                    {'_id': customer['_id']},
+                    {'$set': {'pending_changes': edit_customer['pending_changes']}}
+                )
+
+                if result.modified_count == 0:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                        detail=f'Unable to queue update for this customer.')
+
+                # Notify admin about pending changes
+                customer_request = {'name': customer['email'], 'fields': str(edit_customer['pending_changes'])}
+                edit_customer['pending_changes'].pop('updated_at')
+                message = generate_html_message(edit_customer['pending_changes'])
+                print(message)
+                admin_email = "giri1208srinivas@gmail.com"
+                subject = f"Approval Required: Changes to Customer {customer['email']}"
+                body = f"Pending changes for customer:\n\n{edit_customer['pending_changes']}"
+                if customer['partner_id']:
+                    for partner in customer['partner_id']:
+                        member = members_collection.find_one({'_id': ObjectId(partner)})
+                        await Email(subject, member['email'], 'customer_request', message).send_email()
+
+                await Email(subject, admin_email, 'customer_request', message).send_email()
+
+            else:
+                raise HTTPException(status_code=404, detail=f"Customer {edit_customer['email']} does not exist")
 
     else:
         raise HTTPException(status_code=401, detail=token)
