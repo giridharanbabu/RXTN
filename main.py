@@ -1,10 +1,9 @@
-import uvicorn
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from pkg.routes import authentication
 from pkg.routes.user_registration import user_actions
 from pkg.routes.customer import customer
 from pkg.routes.members import members
-from pkg.database.database import database
+from pkg.routes.user_details import factsheet
 # auth
 from fastapi.security import (OAuth2PasswordBearer)
 # CORS headers
@@ -14,8 +13,6 @@ app = FastAPI()
 
 # CORS url
 origins = [
-   "http://localhost:3000",  # Local development frontend
-    "https://rxtn.onrender.com",  # Production backend
     '*'
 ]
 
@@ -32,6 +29,8 @@ app.include_router(user_actions.user_router, tags=["users"])
 app.include_router(members.members_router, tags=["Partners"])
 app.include_router(customer.customer_router, tags=["customer"])
 app.include_router(authentication.auth_router, tags=["authentication"])
+app.include_router(factsheet.master_router)
+
 
 @app.get("/health")
 def index():
@@ -40,5 +39,4 @@ def index():
 
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8110)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
