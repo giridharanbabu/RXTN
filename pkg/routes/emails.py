@@ -22,7 +22,7 @@ class Email:
         try:
             # Load email template
             template = self.env.get_template(self.template + '.html')
-            email_subject = "Rxtn (code: " + self.subject + ")"
+            email_subject = "Rxtn  (" + self.subject + ")"
             # Render the template with context data
             html_content = template.render(subject=email_subject, message=self.subject, body=self.message)
 

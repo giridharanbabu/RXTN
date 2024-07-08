@@ -1,0 +1,46 @@
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+
+
+# Pydantic models
+class TicketCreate(BaseModel):
+    title: str
+    description: str
+
+
+class Ticket(BaseModel):
+    id: Optional[str] = Field(default=None, alias="_id")
+    title: str
+    description: str
+    Customer: str
+    customer_name: Optional[str] = None
+    admin_name: Optional[str] = None
+    partner_name: Optional[str] = None
+    partner: Optional[str] = None
+    admin: Optional[str] = None
+    status: str = "open"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    current_status: Optional[str] = None
+
+    class Config:
+        allow_population_by_field_name = True
+
+
+class ChatMessageCreate(BaseModel):
+    content: str
+
+
+class ChatMessage(BaseModel):
+    id: Optional[str] = Field(default=None, alias="_id")
+    ticket_id: str
+    sender_id: Optional[str] = None
+    content: str
+    receiver_id : Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    sender_name: Optional[str] = None
+    receiver_name: Optional[str] = None
+
+    class Config:
+        allow_population_by_field_name = True
+
