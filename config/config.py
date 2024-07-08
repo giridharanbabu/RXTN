@@ -8,20 +8,20 @@ class Settings(BaseSettings):
     SECRET: str
     EMAIL_HOST: str
     EMAIL_PORT: int
-    EMAIL_USERNAME: EmailStr
-    EMAIL_PASSWORD: str
+    EMAIL_USERNAME : EmailStr
+    EMAIL_PASSWORD : str
 
-    EMAIL_FROM: EmailStr
-    MONGO_INITDB_ROOT_USERNAME: EmailStr
-    MONGO_INITDB_ROOT_PASSWORD: str
-    MONGO_INITDB_DATABASE: str
+    EMAIL_FROM : EmailStr
+    MONGO_INITDB_ROOT_USERNAME : EmailStr
+    MONGO_INITDB_ROOT_PASSWORD : str
+    MONGO_INITDB_DATABASE : str
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int  # 30 minutes
-    REFRESH_TOKEN_EXPIRE_MINUTES: str  # 7 days
-    ALGORITHM: str
-    JWT_SECRET_KEY: str  # should be kept secret
-    JWT_REFRESH_SECRET_KEY: str  # should be kept secret
-    DATABASE_URL: str
+    ACCESS_TOKEN_EXPIRE_MINUTES : int  # 30 minutes
+    REFRESH_TOKEN_EXPIRE_MINUTES : str  # 7 days
+    ALGORITHM : str
+    JWT_SECRET_KEY : str  # should be kept secret
+    JWT_REFRESH_SECRET_KEY : str  # should be kept secret
+    DATABASE_URL : str
     EMAIL_EXPIRATION_TIME_MIN: int
 
     class Config:
