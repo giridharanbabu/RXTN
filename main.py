@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pkg.routes import authentication
+from pkg.routes.ticketing import ticketing
 from pkg.routes.user_registration import user_actions
 from pkg.routes.customer import customer
 from pkg.routes.members import members
@@ -29,7 +30,8 @@ app.include_router(user_actions.user_router, tags=["users"])
 app.include_router(members.members_router, tags=["Partners"])
 app.include_router(customer.customer_router, tags=["customer"])
 app.include_router(authentication.auth_router, tags=["authentication"])
-app.include_router(factsheet.master_router)
+app.include_router(factsheet.master_router, tags=["Client Master Data"])
+app.include_router(ticketing.ticket_router, tags=['Ticketing'])
 
 
 @app.get("/health")

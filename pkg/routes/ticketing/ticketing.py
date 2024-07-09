@@ -5,7 +5,7 @@ from bson import ObjectId
 from pkg.routes.authentication import val_token
 from pkg.routes.customer.customer import generate_html_message
 from pkg.routes.emails import Email
-from pkg.routes.ticketing.ticket_models import Ticket, TicketCreate, ChatMessage, ChatMessageCreate
+from pkg.routes.ticketing.ticket_models import Ticket, TicketCreate, ChatMessage, ChatMessageCreate, CloseTicket
 from pkg.database.database import database
 from datetime import datetime
 
@@ -236,5 +236,40 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
             chat_messages.append({k: v for k, v in chat_message_data.items() if v is not None})
 
         return chat_messages
+    else:
+        raise HTTPException(status_code=401, detail=token[1])
+
+
+@ticket_router.post("/tickets/{ticket_id}/close",response_model=CloseTicket)
+async def create_chat_message(ticket_id: str, message: ChatMessageCreate, token: str = Depends(val_token)):
+    message_doc = message.dict()
+    print(token)
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] == 'Customer':
+            details = customers_collection.find_one({'email': payload['email']})
+        elif payload['role'] == 'partner':
+            details = member_collections.find_one({'email': payload['email']})
+            message_doc['sender_name'] = details['name']
+        elif payload['role'] in ['org-admin', 'admin']:
+            details = user_collection.find_one({'email': payload['email']})
+            payload['role'] = 'admin'
+
+        ticket = await get_document_by_id_byrequester(ticket_id, str(details['_id']), payload['role'])
+        # ticket = await get_document_by_id(ticket_id)
+        if ticket is None:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        message_doc['ticket_id'] = ticket_id
+        message_doc["created_at"] = datetime.utcnow()
+        update_ticket_status = ticket_collection.update_one(
+            {'_id': ObjectId(ticket_id)},
+            {'$set': {"status":"closed","current_status":"closed","close_description": message_doc['content'], "closed_by": str(details['_id']), "role":payload['role']}}
+        )
+        message_doc['close_description'] = message_doc['content']
+        message_doc['closed_by'] = str(details['_id'])
+        message_doc['role'] = payload['role']
+        message_doc['status'] = "closed"
+        message_doc["_id"] = str(update_ticket_status.upserted_id)  # Convert ObjectId to string for response
+        return CloseTicket(**message_doc)
     else:
         raise HTTPException(status_code=401, detail=token[1])

@@ -44,3 +44,17 @@ class ChatMessage(BaseModel):
     class Config:
         allow_population_by_field_name = True
 
+
+class CloseTicket(BaseModel):
+    id: Optional[str] = Field(default=None, alias="_id")
+    ticket_id: str
+    content: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    current_status: Optional[str] = None
+    status: str
+    close_description: str
+    closed_by: str
+    role: str
+
+
+
