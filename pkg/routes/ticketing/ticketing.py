@@ -27,6 +27,7 @@ async def get_document_by_id(id):
     return doc
 
 
+
 async def get_document_by_id_byrequester(id, receiver_id, name):
     print({"_id": ObjectId(id), name: receiver_id})
     doc = ticket_collection.find_one({"_id": ObjectId(id), name: receiver_id})
@@ -55,6 +56,10 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
             member = member_collections.find_one({'_id': ObjectId(get_partner)})
             ticket_doc['partner'] = str(member['_id'])
             ticket_doc['partner_name'] = str(member['name'])
+            # update_ticket_status = member_collections.update_one(
+            #     {'_id': ObjectId(member['_id'])},
+            #     {'$set': {'tickets': tickets}}
+            # )
             await Email(subject, member['email'], 'query_request', body).send_email()
         admin_email = "giri1208srinivas@gmail.com"
 
@@ -65,6 +70,11 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         result = ticket_collection.insert_one(ticket_doc)
         ticket_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
         # return ticket_doc
+        ticket_info = {"ticket_id": ticket_doc["_id"], "status": ticket_doc["status"],
+                       "created_at": ticket_doc["created_at"], "created_by": ticket_doc['Customer']}
+        update_customer = customers_collection.update_one({'_id': ObjectId(customer_details['_id'])},
+                                                          {'$set': {'tickets': ticket_info}})
+
         return Ticket(**ticket_doc)
     else:
         raise HTTPException(status_code=401, detail=token[1])
@@ -91,6 +101,58 @@ async def get_ticket(ticket_id: str, token: str = Depends(val_token)):
         return ticket  # Ticket(**ticket)
     else:
         raise HTTPException(status_code=401, detail=token[1])
+
+
+# Get a ticket by ID
+@ticket_router.get("/tickets/")
+async def get_all_ticket(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'email': payload["email"]})
+
+        if payload['role'] in ['org-admin', "admin"]:
+            if user:
+                ticket_cursor = ticket_collection.find()
+                tickets = []
+
+                for ticket in ticket_cursor:
+                    # Convert ObjectId to string if necessary
+                    ticket["_id"] = str(ticket["_id"])
+                    tickets.append(ticket)
+
+                return tickets
+            else:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view tickets")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@ticket_router.get("/tickets/role/id")
+async def get_all_ticket(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] == 'Customer':
+            details = customers_collection.find_one({'email': payload['email']})
+        elif payload['role'] == 'partner':
+            details = member_collections.find_one({'email': payload['email']})
+            message_doc['sender_name'] = details['name']
+        elif payload['role'] in ['org-admin', 'admin']:
+            details = user_collection.find_one({'email': payload['email']})
+            payload['role'] = 'admin'
+        print(details['_id'])
+        ticket_cursor = ticket_collection.find({payload['role']: str(details['_id'])})
+        tickets = []
+        print(ticket_cursor)
+        for ticket in ticket_cursor:
+            # Convert ObjectId to string if necessary
+            ticket["_id"] = str(ticket["_id"])
+            tickets.append(ticket)
+
+        return tickets
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 # @ticket_router.get("/tickets/{ticket_id}/initiate", response_model=Ticket)
@@ -137,13 +199,17 @@ async def create_chat_message(ticket_id: str, message: ChatMessageCreate, token:
             details = customers_collection.find_one({'email': payload['email']})
             message_doc['sender_id'] = str(details['_id'])
             message_doc['sender_name'] = details['name']
+            message_doc['role'] = payload['role']
         elif payload['role'] == 'partner':
             details = member_collections.find_one({'email': payload['email']})
             message_doc['sender_name'] = details['name']
             message_doc['sender_id'] = str(details['_id'])
+            message_doc['role'] = payload['role']
+
         elif payload['role'] in ['org-admin', 'admin']:
             details = user_collection.find_one({'email': payload['email']})
             payload['role'] = 'admin'
+            message_doc['role'] = 'admin'
             message_doc['sender_name'] = details['name']
             message_doc['sender_id'] = str(details['_id'])
 
@@ -157,7 +223,7 @@ async def create_chat_message(ticket_id: str, message: ChatMessageCreate, token:
         result = chat_messages_collections.insert_one(message_doc)
         update_ticket_status = ticket_collection.update_one(
             {'_id': ObjectId(ticket_id)},
-            {'$set': {"current_status": payload['role']+"_responded"}}
+            {'$set': {"current_status": payload['role'] + "_responded"}}
         )
         message_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
         return ChatMessage(**message_doc)
@@ -184,7 +250,7 @@ async def get_documents_by_filter(filter):
 #     return [ChatMessage(**message) for message in messages]
 
 
-@ticket_router.get("/tickets/{ticket_id}/messages")#, response_model=List[ChatMessage])
+@ticket_router.get("/tickets/{ticket_id}/messages")  # , response_model=List[ChatMessage])
 async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
     if not token[0]:
         raise HTTPException(status_code=401, detail=token[1])
@@ -226,10 +292,11 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
                 'ticket_id': message['ticket_id'],
                 'content': message['content'],
                 'created_at': message['created_at'],
+                'role': message['role'],
                 'receiver_id': str(message['sender_id']) if message['sender_id'] != str(details['_id']) else None,
                 'receiver_name': str(message['sender_name']) if message['sender_id'] != str(details['_id']) else None,
                 'sender_id': str(message['sender_id']) if message['sender_id'] == str(details['_id']) else None,
-                'sender_name': str(message['sender_name']) if message['sender_id'] == str(details['_id']) else None,
+                'sender_name': str(message['sender_name']) if message['sender_id'] == str(details['_id']) else None
             }
             # Filter out None values explicitly
 
@@ -240,7 +307,7 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
         raise HTTPException(status_code=401, detail=token[1])
 
 
-@ticket_router.post("/tickets/{ticket_id}/close",response_model=CloseTicket)
+@ticket_router.post("/tickets/{ticket_id}/close", response_model=CloseTicket)
 async def create_chat_message(ticket_id: str, message: ChatMessageCreate, token: str = Depends(val_token)):
     message_doc = message.dict()
     print(token)
@@ -263,7 +330,8 @@ async def create_chat_message(ticket_id: str, message: ChatMessageCreate, token:
         message_doc["created_at"] = datetime.utcnow()
         update_ticket_status = ticket_collection.update_one(
             {'_id': ObjectId(ticket_id)},
-            {'$set': {"status":"closed","current_status":"closed","close_description": message_doc['content'], "closed_by": str(details['_id']), "role":payload['role']}}
+            {'$set': {"status": "closed", "current_status": "closed", "close_description": message_doc['content'],
+                      "closed_by": str(details['_id']), "role": payload['role']}}
         )
         message_doc['close_description'] = message_doc['content']
         message_doc['closed_by'] = str(details['_id'])
