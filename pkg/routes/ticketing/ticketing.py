@@ -27,7 +27,6 @@ async def get_document_by_id(id):
     return doc
 
 
-
 async def get_document_by_id_byrequester(id, receiver_id, name):
     print({"_id": ObjectId(id), name: receiver_id})
     doc = ticket_collection.find_one({"_id": ObjectId(id), name: receiver_id})
@@ -129,28 +128,35 @@ async def get_all_ticket(token: str = Depends(val_token)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-@ticket_router.get("/tickets/role/id")
-async def get_all_ticket(token: str = Depends(val_token)):
+@ticket_router.get("/tickets/{role}/{id}")
+async def get_all_ticket_byroleid(role, id, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
-        if payload['role'] == 'Customer':
-            details = customers_collection.find_one({'email': payload['email']})
-        elif payload['role'] == 'partner':
-            details = member_collections.find_one({'email': payload['email']})
-            message_doc['sender_name'] = details['name']
-        elif payload['role'] in ['org-admin', 'admin']:
-            details = user_collection.find_one({'email': payload['email']})
-            payload['role'] = 'admin'
-        print(details['_id'])
-        ticket_cursor = ticket_collection.find({payload['role']: str(details['_id'])})
-        tickets = []
-        print(ticket_cursor)
-        for ticket in ticket_cursor:
-            # Convert ObjectId to string if necessary
-            ticket["_id"] = str(ticket["_id"])
-            tickets.append(ticket)
+        user = user_collection.find_one({'email': payload["email"]})
 
-        return tickets
+        if payload['role'] in ['org-admin', "admin"]:
+            if user:
+                if role == 'Customer':
+                    details = customers_collection.find_one({'_id': ObjectId(id)})
+                elif role == 'partner':
+                    details = member_collections.find_one({'_id': ObjectId(id)})
+                elif role in ['org-admin', 'admin']:
+                    details = user_collection.find_one({'_id': ObjectId(id)})
+                    role = 'admin'
+                ticket_cursor = ticket_collection.find({role: str(details['_id'])})
+                tickets = []
+                print(ticket_cursor)
+                for ticket in ticket_cursor:
+                    # Convert ObjectId to string if necessary
+                    ticket["_id"] = str(ticket["_id"])
+                    tickets.append(ticket)
+
+                return tickets
+            else:
+                raise HTTPException(status_code=401, detail="Invalid token")
+
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view tickets")
     else:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -341,3 +347,30 @@ async def create_chat_message(ticket_id: str, message: ChatMessageCreate, token:
         return CloseTicket(**message_doc)
     else:
         raise HTTPException(status_code=401, detail=token[1])
+
+
+@ticket_router.get("/tickets/login/")
+async def ticket_byloginuser(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        print(payload['role'], payload['email'])
+        if payload['role'] == 'Customer':
+            details = customers_collection.find_one({'email': payload['email']})
+        elif payload['role'] == 'partner':
+            details = member_collections.find_one({'email': payload['email']})
+        elif payload['role'] in ['org-admin', 'admin']:
+            details = user_collection.find_one({'email': payload['email']})
+            print(details)
+            payload['role'] = 'admin'
+        print(details['_id'])
+        ticket_cursor = ticket_collection.find({payload['role']: str(details['_id'])})
+        tickets = []
+        print(ticket_cursor)
+        for ticket in ticket_cursor:
+            # Convert ObjectId to string if necessary
+            ticket["_id"] = str(ticket["_id"])
+            tickets.append(ticket)
+
+        return tickets
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
