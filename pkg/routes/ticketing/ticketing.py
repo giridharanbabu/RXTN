@@ -8,6 +8,7 @@ from pkg.routes.emails import Email
 from pkg.routes.ticketing.ticket_models import Ticket, TicketCreate, ChatMessage, ChatMessageCreate, CloseTicket
 from pkg.database.database import database
 from datetime import datetime
+from fastapi.responses import StreamingResponse
 
 ticket_router = APIRouter()
 
@@ -166,7 +167,7 @@ async def create_chat_message(
         ticket_id: str,
         content: str = Form(...),
         token: str = Depends(val_token),
-        file: UploadFile = File(None)
+        files: List[UploadFile] = File([])
 ):
     message_doc = {'content': content}
     # message_doc = message.dict()
@@ -196,15 +197,15 @@ async def create_chat_message(
         message_doc["created_at"] = datetime.utcnow()
 
         # Handle file upload
-        if file:
-            file_data = await file.read()
-            file_id = database.store_file(file_data, file.filename)
-            message_doc['file_id'] = str(file_id)
-            message_doc['file_name'] = file.filename
-        else:
-            message_doc['file_id'] = None
-            message_doc['file_name'] = None
+        if files:
+            message_doc['files'] = []
+            for file in files:
+                file_data = await file.read()
+                file_id = database.store_file(file_data, file.filename)
+                message_doc['files'].append({'file_id': str(file_id), 'file_name': file.filename})
 
+        else:
+            message_doc['files'] = {}
 
         result = chat_messages_collections.insert_one(message_doc)
         ticket_collection.update_one(
@@ -235,8 +236,21 @@ async def get_documents_by_filter(filter):
 #     messages = await get_documents_by_filter({"ticket_id": ticket_id})
 #     return [ChatMessage(**message) for message in messages]
 
+@ticket_router.get("/files/{file_id}")
+async def get_file(file_id: str, token: str = Depends(val_token)):
+    if token[0] is True:
+        file = database.get_file(file_id)
+        if file is None:
+            raise HTTPException(status_code=404, detail="File not found")
 
-@ticket_router.get("/tickets/{ticket_id}/messages")#,response_model=List[ChatMessage])
+        response = StreamingResponse(file, media_type="application/octet-stream")
+        response.headers["Content-Disposition"] = f"attachment; filename={file.filename}"
+        return response
+    else:
+        raise HTTPException(status_code=401, detail=token[1])
+
+
+@ticket_router.get("/tickets/{ticket_id}/messages", response_model=List[ChatMessage])
 async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
     if not token[0]:
         raise HTTPException(status_code=401, detail=token[1])
@@ -274,7 +288,6 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
 
         # Process and modify messages
         for message in messages:
-
             chat_message_data = {
                 '_id': message['_id'],
                 'ticket_id': message['ticket_id'],
@@ -285,8 +298,8 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
                 'receiver_name': str(message['sender_name']) if message['sender_id'] != str(details['_id']) else None,
                 'sender_id': str(message['sender_id']) if message['sender_id'] == str(details['_id']) else None,
                 'sender_name': str(message['sender_name']) if message['sender_id'] == str(details['_id']) else None,
-                'file_id':  message['file_id'],
-                'file_name':  message['file_name'],
+                'files':  message.get('files', None)
+            # 'files': message['files'] if message['files'] in message else None,
             }
             # Filter out None values explicitly
 

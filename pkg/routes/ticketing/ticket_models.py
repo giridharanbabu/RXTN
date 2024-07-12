@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -31,6 +31,11 @@ class ChatMessageCreate(BaseModel):
     content: str
 
 
+class FileMetadata(BaseModel):
+    file_id: str
+    file_name: str
+
+
 class ChatMessage(BaseModel):
     id: Optional[str] = Field(default=None, alias="_id")
     ticket_id: str
@@ -40,8 +45,10 @@ class ChatMessage(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     sender_name: Optional[str] = None
     receiver_name: Optional[str] = None
-    file_id: Optional[str] = None
-    file_name: Optional[str] = None
+    files: Optional[List[FileMetadata]] = None
+
+    # file_id: Optional[str] = None
+    # file_name: Optional[str] = None
 
     class Config:
         allow_population_by_field_name = True
