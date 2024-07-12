@@ -40,6 +40,8 @@ class ChatMessage(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     sender_name: Optional[str] = None
     receiver_name: Optional[str] = None
+    file_id: Optional[str] = None
+    file_name: Optional[str] = None
 
     class Config:
         allow_population_by_field_name = True
