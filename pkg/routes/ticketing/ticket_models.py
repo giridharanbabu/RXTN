@@ -1,3 +1,4 @@
+from bson import ObjectId
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -41,7 +42,7 @@ class ChatMessage(BaseModel):
     ticket_id: str
     sender_id: Optional[str] = None
     content: str
-    receiver_id : Optional[str] = None
+    receiver_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     sender_name: Optional[str] = None
     receiver_name: Optional[str] = None
@@ -64,6 +65,3 @@ class CloseTicket(BaseModel):
     close_description: str
     closed_by: str
     role: str
-
-
-

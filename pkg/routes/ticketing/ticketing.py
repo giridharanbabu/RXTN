@@ -1,3 +1,5 @@
+import json
+
 from fastapi import FastAPI, HTTPException, Depends, Body, APIRouter, UploadFile, File, Form
 from typing import List, Optional
 from bson import ObjectId
@@ -8,7 +10,7 @@ from pkg.routes.emails import Email
 from pkg.routes.ticketing.ticket_models import Ticket, TicketCreate, ChatMessage, ChatMessageCreate, CloseTicket
 from pkg.database.database import database
 from datetime import datetime
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 
 ticket_router = APIRouter()
 
@@ -251,7 +253,7 @@ async def get_file(file_id: str, token: str = Depends(val_token)):
         raise HTTPException(status_code=401, detail=token[1])
 
 
-@ticket_router.get("/tickets/{ticket_id}/messages", response_model=List[ChatMessage])
+@ticket_router.get("/tickets/{ticket_id}/messages")#, response_model=List[ChatMessage])
 async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
     if not token[0]:
         raise HTTPException(status_code=401, detail=token[1])
@@ -282,11 +284,9 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
         ticket = await get_document_by_id(ticket_id)
         if ticket is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
-
         messages = await get_documents_by_filter({"ticket_id": ticket_id})
         # return messages
-        ChatMessage = []
-
+        chat_messages = []
         # Process and modify messages
         for message in messages:
             chat_message_data = {
@@ -304,8 +304,12 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
             }
             # Filter out None values explicitly
 
-            ChatMessage.append({k: v for k, v in chat_message_data.items() if v is not None})
-        return ChatMessage
+            filtered_chat_message = {k: v for k, v in chat_message_data.items() if v is not None}
+            chat_messages.append(filtered_chat_message)
+        # response_data = [msg.dict(exclude_none=True) for msg in chat_messages]
+
+        return chat_messages
+        # return ChatMessage
     else:
         raise HTTPException(status_code=401, detail=token[1])
 
