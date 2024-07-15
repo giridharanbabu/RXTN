@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends, Body, APIRouter, UploadFile, File, Form
-from typing import List
+from typing import List, Optional
 from bson import ObjectId
 import gridfs
 from pkg.routes.authentication import val_token
@@ -167,7 +167,7 @@ async def create_chat_message(
         ticket_id: str,
         content: str = Form(...),
         token: str = Depends(val_token),
-        files: List[UploadFile] = File([])
+        files:  List[UploadFile] = File([])
 ):
     message_doc = {'content': content}
     # message_doc = message.dict()
@@ -197,6 +197,7 @@ async def create_chat_message(
         message_doc["created_at"] = datetime.utcnow()
 
         # Handle file upload
+        print("files", files)
         if files:
             message_doc['files'] = []
             for file in files:
@@ -205,7 +206,7 @@ async def create_chat_message(
                 message_doc['files'].append({'file_id': str(file_id), 'file_name': file.filename})
 
         else:
-            message_doc['files'] = {}
+            message_doc['files'] = []
 
         result = chat_messages_collections.insert_one(message_doc)
         ticket_collection.update_one(
@@ -304,7 +305,6 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
             # Filter out None values explicitly
 
             ChatMessage.append({k: v for k, v in chat_message_data.items() if v is not None})
-
         return ChatMessage
     else:
         raise HTTPException(status_code=401, detail=token[1])

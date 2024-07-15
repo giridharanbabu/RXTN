@@ -45,7 +45,7 @@ class ChatMessage(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     sender_name: Optional[str] = None
     receiver_name: Optional[str] = None
-    files: Optional[List[FileMetadata]] = None
+    files: Optional[List[FileMetadata]] = []
 
     # file_id: Optional[str] = None
     # file_name: Optional[str] = None
