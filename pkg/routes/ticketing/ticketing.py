@@ -17,7 +17,7 @@ ticket_router = APIRouter()
 ticket_collection = database.get_collection('tickets')
 chat_messages_collections = database.get_collection('chat_messages')
 customers_collection = database.get_collection('customers')
-member_collections = database.get_collection('members')
+member_collections = database.get_collection('partners')
 user_collection = database.get_collection('users')
 
 

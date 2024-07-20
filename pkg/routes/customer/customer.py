@@ -17,7 +17,7 @@ from pkg.routes.user_registration.user_utils import generate_otp
 customer_router = APIRouter()
 customers_collection = database.get_collection('customers')
 user_collection = database.get_collection('users')
-member_collections = database.get_collection('members')
+member_collections = database.get_collection('partners')
 
 
 @customer_router.post("/customer/cp/register/")
@@ -177,6 +177,18 @@ async def list_customers(token: str = Depends(val_token)):
                 for customer in customers_cursor:
                     # Convert ObjectId to string if necessary
                     customer["_id"] = str(customer["_id"])
+                    if customer['partner_id']:
+                        partner_information = member_collections.find_one({"_id": ObjectId(customer['partner_id'][0])})
+                        if partner_information:
+                            member = PartnerResponse(
+                                id=str(customer['partner_id'][0]),
+                                name=partner_information['name'],
+                                email=partner_information['email'],
+                                role=partner_information.get('role', "")
+                            )
+                            customer['partner'] = member.dict()
+                    customer.pop('password',None)
+                    customer.pop('old_passwords',None)
                     customers.append(customer)
 
                 return customers
@@ -197,6 +209,16 @@ async def update_user(token: str = Depends(val_token)):
         print(customer)
         if customer:
             customer['id'] = str(customer['_id'])
+            if customer['partner_id']:
+                partner_information = member_collections.find_one({"_id": ObjectId(customer['partner_id'][0])})
+                if partner_information:
+                    member = PartnerResponse(
+                        id=str(customer['partner_id'][0]),
+                        name=partner_information['name'],
+                        email=partner_information['email'],
+                        role=partner_information.get('role', "")
+                    )
+                    customer['partner'] = member.dict()
             customer['created_at'] = str(customer['created_at'])
             return json.loads(json_util.dumps(customer))
         # Check if the user is found and updated
@@ -219,7 +241,6 @@ def generate_html_message(changes: dict) -> str:
 async def update_customer(edit_customer: EditCustomer, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
-
         customer_collection = database.get_collection('customers')
         edit_customer = edit_customer.dict(exclude_none=True)
         if payload['role'] in ['org-admin', 'admin']:

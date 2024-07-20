@@ -58,30 +58,37 @@ class LoginCustomerSchema(BaseModel):
     partner_id: list or None = None
 
 
+class PartnerResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: Optional[str]
+
+
 class CustomerResponse(BaseModel):
     id: str
     name: str
     email: str
     phone: str
-    partner_id: Optional[list] or None = []
-    created_at: datetime
-    role: Optional[str] or None = None
-    secondary_contact: Optional[str] or None = None
-    gender: Optional[str] or None = None
-    date_of_birth: Optional[str] or None = None
-    address: Optional[str] or None = None
-    annual_income: Optional[int] or None = None
-    source_of_income: Optional[str] or None = None
-    marital_status: Optional[str] or None = None
-    pan_number: Optional[str] or None = None
-    aadhaar_number: Optional[str] or None = None
-    no_of_dependants: Optional[str] or None = None
-    current_city: Optional[str] or None = None
-    educational_qualification: Optional[str] or None = None
-    permanent_address: Optional[str] or None = None
-    nominee_name: Optional[str] or None = None
-    nominee_relationship: Optional[str] or None = None
-    nominee_dob: Optional[str] or None = None
+    created_at: str
+    role: str
+    secondary_contact: Optional[str] = None
+    gender: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    address: Optional[str] = None
+    annual_income: Optional[str] = None
+    source_of_income: Optional[str] = None
+    marital_status: Optional[str] = None
+    pan_number: Optional[str] = None
+    aadhaar_number: Optional[str] = None
+    no_of_dependants: Optional[str] = None
+    current_city: Optional[str] = None
+    educational_qualification: Optional[str] = None
+    permanent_address: Optional[str] = None
+    nominee_name: Optional[str] = None
+    nominee_relationship: Optional[str] = None
+    nominee_dob: Optional[str] = None
+    partner: Optional[PartnerResponse] = None
 
 
 class AdminApprovalRequest(BaseModel):
