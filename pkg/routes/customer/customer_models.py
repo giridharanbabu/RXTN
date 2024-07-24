@@ -31,7 +31,7 @@ class Customer(BaseModel):
 
 class EditCustomer(BaseModel):
     name: Optional[str] or None = None
-    email: Optional[str] or None = None
+    email: str
     phone: Optional[str] or None = None
     partner_id: Optional[list] or None = []
     secondary_contact: Optional[str] or None = None
@@ -69,7 +69,7 @@ class CustomerResponse(BaseModel):
     id: str
     name: str
     email: str
-    phone: str
+    phone: Optional[str]
     created_at: str
     role: str
     secondary_contact: Optional[str] = None

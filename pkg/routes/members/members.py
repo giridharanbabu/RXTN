@@ -1,9 +1,12 @@
+import uuid
+
 from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends, Response
 from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPasswordRequest, AdminApprovalRequest
 from pkg.routes.members.members_models import *
 from pkg.routes.serializers.userSerializers import customerEntity
 from pkg.routes.user_registration import user_utils
-from pkg.routes.customer.customer_utils import generate_temp_password, hash_password, generate_html_message, verify_password
+from pkg.routes.customer.customer_utils import generate_temp_password, hash_password, generate_html_message, \
+    verify_password
 from pkg.database.database import database
 from pkg.routes.authentication import val_token
 from pkg.routes.emails import Email
@@ -11,6 +14,7 @@ from random import randbytes
 import hashlib, base64
 from config.config import settings
 from pkg.routes.user_registration.user_utils import generate_otp
+
 members_router = APIRouter()
 members_collection = database.get_collection('partners')
 user_collection = database.get_collection('users')
@@ -29,6 +33,11 @@ async def create_user(payload: CreateMemberSchema):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                                 detail='Account already exist')
     else:
+        while True:
+            partner_user_id = str(uuid.uuid4())
+            if not members_collection.find_one({'partner_user_id': partner_user_id}):
+                payload.partner_user_id = partner_user_id
+                break
         # Compare password and passwordConfirm
         if payload.password != payload.passwordConfirm:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Passwords do not match')
@@ -86,6 +95,13 @@ async def create_member(member: Members, token: str = Depends(val_token)):
         hashed_temp_password = hash_password(temp_password)
         details['password'] = hashed_temp_password
         details['verified'] = True
+        while True:
+            partner_user_id = str(uuid.uuid4())
+            test = members_collection.find_one({'partner_user_id': partner_user_id})
+            print(test)
+            if not members_collection.find_one({'partner_user_id': partner_user_id}):
+                details['partner_user_id'] = partner_user_id
+                break
         # Iterate over the results
         document_list = []
         for document in cursor:
@@ -112,6 +128,7 @@ async def create_member(member: Members, token: str = Depends(val_token)):
 
     else:
         raise HTTPException(status_code=401, detail=token)
+
 
 #
 # @members_router.post("/edit/request")
@@ -168,83 +185,98 @@ async def update_partner(member: Members, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         edit_members = member.dict(exclude_none=True)
-        if payload['role'] in ['org-admin', 'admin']:
-            member = members_collection.find_one({'email': edit_members["email"]})
+        # if payload['role'] in ['org-admin', 'admin']:
+        member = members_collection.find_one({'email': edit_members["email"]})
+        if member:
             edit_members['updated_at'] = datetime.utcnow()
             edit_members.pop('role')
             result = members_collection.update_one({"_id": member["_id"]}, {"$set": edit_members})
             if result:
                 return {"message": "Partner updated successfully"}
-        else:
-            member = members_collection.find_one({'email': edit_members["email"]})
-            print(member)
-            edit_members.pop('role')
-            if member:
-                edit_members['pending_changes'] = {
-                    **edit_members,
-                    'updated_at': datetime.utcnow()
-                }
-                result = members_collection.update_one(
-                    {'_id': member['_id']},
-                    {'$set': {'pending_changes': edit_members['pending_changes']}}
-                )
-
-                if result.modified_count == 0:
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                        detail=f'Unable to queue update for this customer.')
-
-                # Notify admin about pending changes
-                customer_request = {'name': member['email'], 'fields': str(edit_members['pending_changes'])}
-                edit_members['pending_changes'].pop('updated_at')
-                message = generate_html_message(edit_members['pending_changes'])
-                print(message)
-                admin_email = "giri1208srinivas@gmail.com"
-                subject = f"Approval Required: Changes to Customer {member['email']}"
-                body = f"Pending changes for customer:\n\n{edit_members['pending_changes']}"
-
-                await Email(subject, admin_email, 'customer_request', message).send_email()
-                return {'status': f'Partner update queued for approval - {member["name"]}'}
-
+            elif result.modified_count == 0:
+                raise HTTPException(status_code=500, detail="Failed to apply changes.")
             else:
-                raise HTTPException(status_code=404, detail=f"Partner {edit_members['email']} does not exist")
+                raise HTTPException(status_code=400,
+                                    detail=f"Customer {edit_members['email']} -Unable to update information")
+        # else:
+        #     member = members_collection.find_one({'email': edit_members["email"]})
+        #     print(member)
+        #     edit_members.pop('role')
+        #     if member:
+        #         edit_members['pending_changes'] = {
+        #             **edit_members,
+        #             'updated_at': datetime.utcnow()
+        #         }
+        #         result = members_collection.update_one(
+        #             {'_id': member['_id']},
+        #             {'$set': {'pending_changes': edit_members['pending_changes']}}
+        #         )
+        #
+        #         if result.modified_count == 0:
+        #             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+        #                                 detail=f'Unable to queue update for this customer.')
+        #
+        #         # Notify admin about pending changes
+        #         customer_request = {'name': member['email'], 'fields': str(edit_members['pending_changes'])}
+        #         edit_members['pending_changes'].pop('updated_at')
+        #         message = generate_html_message(edit_members['pending_changes'])
+        #         print(message)
+        #         admin_email = "giri1208srinivas@gmail.com"
+        #         subject = f"Approval Required: Changes to Customer {member['email']}"
+        #         body = f"Pending changes for customer:\n\n{edit_members['pending_changes']}"
+        #
+        #         await Email(subject, admin_email, 'customer_request', message).send_email()
+        #         return {'status': f'Partner update queued for approval - {member["name"]}'}
+
+        else:
+            raise HTTPException(status_code=404, detail=f"Partner {edit_members['email']} does not exist")
 
     else:
         raise HTTPException(status_code=401, detail=token)
 
 
-@members_router.post("/admin/approve/{partner_id}")
-async def approve_customer_edit(customer_id: str, approval: AdminApprovalRequest):
-    if not ObjectId.is_valid(customer_id):
-        raise HTTPException(status_code=400, detail="Invalid customer ID")
+# @members_router.post("/admin/approve/{partner_id}")
+# async def approve_customer_edit(customer_id: str, approval: AdminApprovalRequest):
+#     if not ObjectId.is_valid(customer_id):
+#         raise HTTPException(status_code=400, detail="Invalid customer ID")
+#
+#     customer = members_collection.find_one({'_id': ObjectId(customer_id)})
+#     if not customer:
+#         raise HTTPException(status_code=404, detail="Customer not found")
+#
+#     pending_changes = customer.get('pending_changes')
+#     if not pending_changes:
+#         raise HTTPException(status_code=404, detail="No pending changes found")
+#
+#     if approval.approve:
+#         # Apply the changes
+#         result = members_collection.update_one(
+#             {'_id': ObjectId(customer_id)},
+#             {'$set': pending_changes, '$unset': {'pending_changes': ""}}
+#         )
+#         if result.modified_count == 0:
+#             raise HTTPException(status_code=500, detail="Failed to apply changes.")
+#         message = "Changes approved and applied successfully."
+#     else:
+#         # Discard the changes
+#         result = members_collection.update_one(
+#             {'_id': ObjectId(customer_id)},
+#             {'$unset': {'pending_changes': ""}}
+#         )
+#         if result.modified_count == 0:
+#             raise HTTPException(status_code=500, detail="Failed to discard changes.")
+#         message = "Changes rejected and discarded."
+#
+#     return {'message': message}
 
-    customer = members_collection.find_one({'_id': ObjectId(customer_id)})
-    if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
 
-    pending_changes = customer.get('pending_changes')
-    if not pending_changes:
-        raise HTTPException(status_code=404, detail="No pending changes found")
-
-    if approval.approve:
-        # Apply the changes
-        result = members_collection.update_one(
-            {'_id': ObjectId(customer_id)},
-            {'$set': pending_changes, '$unset': {'pending_changes': ""}}
-        )
-        if result.modified_count == 0:
-            raise HTTPException(status_code=500, detail="Failed to apply changes.")
-        message = "Changes approved and applied successfully."
-    else:
-        # Discard the changes
-        result = members_collection.update_one(
-            {'_id': ObjectId(customer_id)},
-            {'$unset': {'pending_changes': ""}}
-        )
-        if result.modified_count == 0:
-            raise HTTPException(status_code=500, detail="Failed to discard changes.")
-        message = "Changes rejected and discarded."
-
-    return {'message': message}
+# Utility function to convert _id to string
+def parse_object_id(document):
+    """Convert the '_id' field to a string."""
+    if '_id' in document:
+        document['id'] = str(document['_id'])
+        del document['_id']
+    return document
 
 
 # List partners route
@@ -253,18 +285,23 @@ async def list_partners(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         user = user_collection.find_one({'email': payload["email"]})
+        partners = []
         if payload['role'] in ['org-admin', "admin"]:
             if user:
-                partners_cursor = members_collection.find()
-                partners = []
-                for partner in partners_cursor:
-                    partners.append(MembersResponse(
-                        id=str(partner['_id']),
-                        name=partner['name'],
-                        email=partner['email'],
-                        role=partner['role'],
-                        created_at=partner['created_at']
-                    ))
+                cursor = members_collection.find()
+
+                partners = [parse_object_id(doc) for doc in cursor]
+
+                # if 'partner_user_id' not in partner:
+                #     partner['partner_user_id'] = None
+                # partners.append(MembersResponse(
+                #     id=str(partner['_id']),
+                #     name=partner['name'],
+                #     email=partner['email'],
+                #     role=partner['role'],
+                #     created_at=partner['created_at'],
+                #     partner_user_id=partner['partner_user_id']
+                # ))
                 return partners
             else:
                 raise HTTPException(status_code=401, detail="Invalid token")
