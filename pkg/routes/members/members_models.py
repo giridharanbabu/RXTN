@@ -40,6 +40,7 @@ class MemberBaseSchema(BaseModel):
     email: str
     photo: str
     phone: str
+    partner_user_id: Optional[str] = None
     organization_name: Optional[str] = None
     organization_type: Optional[str] = None
     description: Optional[str] = None
