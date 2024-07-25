@@ -10,6 +10,7 @@ class Members(BaseModel):
     role: str
     created_at: datetime
     phone: str
+    status: str = "approved"
     secondary_contact: Optional[str] or None = None
     gender: Optional[str] or None = None
     date_of_birth: Optional[str] or None = None
@@ -40,6 +41,7 @@ class MemberBaseSchema(BaseModel):
     email: str
     photo: str
     phone: str
+    status: str
     partner_user_id: Optional[str] = None
     organization_name: Optional[str] = None
     organization_type: Optional[str] = None
@@ -76,6 +78,10 @@ class LoginMemberSchema(BaseModel):
     password: constr(min_length=8)
 
 
+class AdminApprovalRequest(BaseModel):
+    status: str
+
+
 class MembersResponse(BaseModel):
     id: str
     name: str
@@ -84,3 +90,4 @@ class MembersResponse(BaseModel):
     phone: Optional[str] = None
     created_at: datetime
     partner_user_id: Optional[str] = None
+    status: Optional[str] = None

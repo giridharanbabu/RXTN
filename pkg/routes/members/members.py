@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends, Response
-from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPasswordRequest, AdminApprovalRequest
+from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPasswordRequest
 from pkg.routes.members.members_models import *
 from pkg.routes.serializers.userSerializers import customerEntity
 from pkg.routes.user_registration import user_utils
@@ -42,7 +42,7 @@ async def create_user(payload: CreateMemberSchema):
         if payload.password != payload.passwordConfirm:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Passwords do not match')
         #  Hash the password
-        payload.password = user_utils.hash_password(payload.password)
+        payload.password = hash_password(payload.password)
         del payload.passwordConfirm
         payload.verified = False
         payload.email = payload.email.lower()
@@ -64,11 +64,11 @@ async def create_user(payload: CreateMemberSchema):
                     "$set": {"verification_code": hotp_v.at(0),
                              "Verification_expireAt": datetime.utcnow() + timedelta(
                                  minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
-                             "updated_at": datetime.utcnow()}})
+                             "updated_at": datetime.utcnow(), "status": "pending"}})
                 await Email(hotp_v.at(0), payload.email, 'verification').send_email()
             except Exception as error:
                 members_collection.find_one_and_update({"_id": result.inserted_id}, {
-                    "$set": {"verification_code": None, "updated_at": datetime.utcnow()}})
+                    "$set": {"verification_code": None, "updated_at": datetime.utcnow()}, "status": "pending"})
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                                     detail='There was an error sending email')
             return {'status': 'success', 'message': 'Verification token successfully sent to your email'}
@@ -95,6 +95,7 @@ async def create_member(member: Members, token: str = Depends(val_token)):
         hashed_temp_password = hash_password(temp_password)
         details['password'] = hashed_temp_password
         details['verified'] = True
+        details['status'] = "approved"
         while True:
             partner_user_id = str(uuid.uuid4())
             test = members_collection.find_one({'partner_user_id': partner_user_id})
@@ -235,6 +236,35 @@ async def update_partner(member: Members, token: str = Depends(val_token)):
         raise HTTPException(status_code=401, detail=token)
 
 
+@members_router.post("/admin/approve/{partner_id}")
+async def approve_partner(partner_id: str, approval: AdminApprovalRequest, token: str = Depends(val_token)):
+    if not ObjectId.is_valid(partner_id):
+        raise HTTPException(status_code=400, detail="Invalid customer ID")
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'email': payload["email"]})
+        if user['role'] in ['org-admin', "admin"]:
+            member = members_collection.find_one({'_id': ObjectId(partner_id)})
+            if not member:
+                raise HTTPException(status_code=404, detail="Customer not found")
+
+            if approval.status:
+                # Apply the changes
+                result = members_collection.update_one(
+                    {'_id': ObjectId(partner_id)},
+                    {'$set': {"status": approval.status}}
+                )
+                if result.modified_count == 0:
+                    raise HTTPException(status_code=500, detail="Failed to apply changes.")
+                message = "Changes approved and applied successfully."
+            else:
+                message = {"unable to get approval status"}
+            return {'message': message}
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to approve Partner")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
+        #
 # @members_router.post("/admin/approve/{partner_id}")
 # async def approve_customer_edit(customer_id: str, approval: AdminApprovalRequest):
 #     if not ObjectId.is_valid(customer_id):
@@ -306,7 +336,7 @@ async def list_partners(token: str = Depends(val_token)):
             else:
                 raise HTTPException(status_code=401, detail="Invalid token")
         else:
-            raise HTTPException(status_code=401, detail="User does not have access to view Customer")
+            raise HTTPException(status_code=401, detail="User does not have access to view Partner")
     else:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -352,33 +382,42 @@ async def login(payload: LoginMemberSchema, response: Response):
     # Check if the user exist
 
     db_user = members_collection.find_one({'email': payload.email.lower()})
+    print(db_user)
     if not db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail='User does not Registered')
-    user = customerEntity(db_user)
-    ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    REFRESH_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    # Check if user verified his email
+    if db_user['status'] == 'approved':
+        user = customerEntity(db_user)
+        print(user)
+        ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        REFRESH_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        # Check if user verified his email
+        if not user['verified']:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Please verify your email address')
 
-    if not verify_password(payload.password, user['password']):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail='Incorrect Email or Password')
+        if not verify_password(payload.password, user['password']):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail='Incorrect Email or Password')
 
-    # Create access token
-    access_token = user_utils.create_access_token(user['email'], user['name'], 'Customer')
-    # Create refresh token
-    refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'Customer')
+        # Create access token
+        access_token = user_utils.create_access_token(user['email'], user['name'], 'Customer')
+        # Create refresh token
+        refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'Customer')
 
-    # Store refresh and access tokens in cookie
-    response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
-                        ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
-    response.set_cookie('refresh_token', refresh_token,
-                        REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
-    response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
-                        ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, False, 'none')
+        # Store refresh and access tokens in cookie
+        response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
+                            ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
+        response.set_cookie('refresh_token', refresh_token,
+                            REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
+        response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
+                            ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, False, 'none')
 
-    # Send both access
-    return {'status': 'success', 'user': user['name'], 'access_token': access_token}
+        # Send both access
+        return {'status': 'success', 'user': user['name'], 'access_token': access_token}
+    else:
+        raise HTTPException(status_code=401,
+                            detail='User does not approved or disabled user')
 
 
 @members_router.post("/member/logout")

@@ -43,5 +43,6 @@ def customerEntity(user) -> dict:
         "name": user["name"],
         "email": user["email"],
         "password": user["password"],
-        "created_at": user["created_at"]
+        "created_at": user["created_at"],
+        "verified": user["verified"]
     }

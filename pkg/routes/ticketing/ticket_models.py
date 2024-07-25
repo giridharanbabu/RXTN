@@ -23,9 +23,11 @@ class Ticket(BaseModel):
     status: str = "open"
     created_at: datetime = Field(default_factory=datetime.utcnow)
     current_status: Optional[str] = None
+    last_message: Field(default_factory=dict)
 
     class Config:
         allow_population_by_field_name = True
+        arbitrary_types_allowed = True
 
 
 class ChatMessageCreate(BaseModel):

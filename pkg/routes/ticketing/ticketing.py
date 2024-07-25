@@ -213,7 +213,7 @@ async def create_chat_message(
         result = chat_messages_collections.insert_one(message_doc)
         ticket_collection.update_one(
             {'_id': ObjectId(ticket_id)},
-            {'$set': {"current_status": payload['role'] + "_responded"}}
+            {'$set': { "current_status": payload['role']+"-responded" ,"last_message": {"role":payload['role'] ,"name":details['name'], "id":str(details['_id']) }}}
         )
         message_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
         return ChatMessage(**message_doc)

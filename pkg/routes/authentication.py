@@ -136,8 +136,8 @@ async def generate_token(request_form: OAuth2PasswordRequestForm = Depends()):
     return {"access_token": token, "token_type": "bearer"}
 
 
-@auth_router.get('/verifyemail/{token}')
-async def verify_me(token: str):
+@auth_router.get('/verifyemail/{email}/{otp}')
+async def verify_me(email: str, otp: str):
     # from database.database import mongo_conn
     # conn = mongo_conn()
     # db = conn['growday']
@@ -152,7 +152,7 @@ async def verify_me(token: str):
     # hotp = pyotp.HOTP(verification_code)
     # print(hotp.at(0))
 
-    result = register.find_one_and_update({"verification_code": token}, {
+    result = register.find_one_and_update({"email":email, "verification_code": otp}, {
         "$set": {"verification_code": None, "verified": True, "updated_at": datetime.utcnow()}}, new=True)
     access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
     if not result:
@@ -166,16 +166,17 @@ async def verify_me(token: str):
     }
 
 
-@auth_router.get('/members/verifyemail/{token}')
-async def verify_partner(token: str):
+@auth_router.get('/members/verifyemail/{email}/{otp}')
+async def verify_partner(email: str, otp: str):
     register = database.get_collection('partners')
 
-    result = register.find_one_and_update({"verification_code": token}, {
+    result = register.find_one_and_update({"email": email, "verification_code": otp}, {
         "$set": {"verification_code": None, "verified": True, "updated_at": datetime.utcnow()}}, new=True)
-    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
     if not result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail='Invalid verification code or account already verified')
+    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
+
 
     return {
         "status": "success",
