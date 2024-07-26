@@ -66,9 +66,9 @@ async def create_user(payload: CreateMemberSchema):
                                  minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
                              "updated_at": datetime.utcnow(), "status": "pending"}})
                 token = generate_otp_token(payload,hotp_v.at(0))
-                token = str(token, 'utf-8')
+                token = str(token)
                 message =f"https://rxtn.onrender.com/members/verifyemail/{token}"
-                await Email(message, payload.email, 'verification').send_email()
+                await Email(f"verification Token", payload.email, 'verification', message= message).send_email()
             except Exception as error:
                 members_collection.find_one_and_update({"_id": result.inserted_id}, {
                     "$set": {"verification_code": None, "updated_at": datetime.utcnow()}, "status": "pending"})
@@ -83,53 +83,57 @@ async def create_user(payload: CreateMemberSchema):
 @members_router.post("/partner/register")
 async def create_member(member: Members, token: str = Depends(val_token)):
     if token[0] is True:
-        details = member.dict()
-        member = members_collection.find_one({'email': details["email"]})
-        if member:
-            raise HTTPException(status_code=409, detail=f"Partner {member['name']} Exists with Email {member['email']}")
-        search_criteria = {"email": token[1]['email'], "members": {
-            "$elemMatch": {
-                "member_name": details['name']
-            }
-        }}
-        # Find documents matching the search criteria
-        cursor = members_collection.find(search_criteria)
-        temp_password = generate_temp_password()
-        hashed_temp_password = hash_password(temp_password)
-        details['password'] = hashed_temp_password
-        details['verified'] = True
-        details['status'] = "approved"
-        while True:
-            partner_user_id = str(uuid.uuid4())
-            test = members_collection.find_one({'partner_user_id': partner_user_id})
-            print(test)
-            if not members_collection.find_one({'partner_user_id': partner_user_id}):
-                details['partner_user_id'] = partner_user_id
-                break
-        # Iterate over the results
-        document_list = []
-        for document in cursor:
-            document_list.append(document)
-        if document_list:
-            raise HTTPException(status_code=409, detail=f"Partner {member['name']} Exists with Email {member['email']}")
-        else:
-            find_user = user_collection.find_one({'email': token[1]['email']})
-            result = members_collection.insert_one(details)
-            await Email(temp_password, details['email'], 'customer_register').send_email()
-            if result.inserted_id:
-                update_user = user_collection.update_one({'email': token[1]['email']}, {
-                    '$push': {'members': {'member_id': result.inserted_id, 'member_name': details['name']}}},
-                                                         upsert=True)
-
-                if update_user:
-                    update_business_users = members_collection.update_one({'_id': ObjectId(result.inserted_id)}, {
-                        '$push': {'User_ids': find_user['_id']}
-                    }, upsert=True)
-                    return {"status": f"Partner- {details['name']} added",
-                            'message': 'Temporary password successfully sent to your email'}
+        payload = token[1]
+        if payload['role'] in ['admin', 'org-admin']:
+            details = member.dict()
+            member = members_collection.find_one({'email': details["email"]})
+            if member:
+                raise HTTPException(status_code=409, detail=f"Partner {member['name']} Exists with Email {member['email']}")
+            search_criteria = {"email": token[1]['email'], "members": {
+                "$elemMatch": {
+                    "member_name": details['name']
+                }
+            }}
+            # Find documents matching the search criteria
+            cursor = members_collection.find(search_criteria)
+            temp_password = generate_temp_password()
+            hashed_temp_password = hash_password(temp_password)
+            details['password'] = hashed_temp_password
+            details['verified'] = True
+            details['status'] = "approved"
+            while True:
+                partner_user_id = str(uuid.uuid4())
+                test = members_collection.find_one({'partner_user_id': partner_user_id})
+                print(test)
+                if not members_collection.find_one({'partner_user_id': partner_user_id}):
+                    details['partner_user_id'] = partner_user_id
+                    break
+            # Iterate over the results
+            document_list = []
+            for document in cursor:
+                document_list.append(document)
+            if document_list:
+                raise HTTPException(status_code=409, detail=f"Partner {member['name']} Exists with Email {member['email']}")
             else:
-                raise HTTPException(status_code=500, detail="Failed to insert data")
+                find_user = user_collection.find_one({'email': token[1]['email']})
+                result = members_collection.insert_one(details)
+                await Email(temp_password, details['email'], 'customer_register').send_email()
+                if result.inserted_id:
+                    update_user = user_collection.update_one({'email': token[1]['email']}, {
+                        '$push': {'members': {'member_id': result.inserted_id, 'member_name': details['name']}}},
+                                                             upsert=True)
 
+                    if update_user:
+                        update_business_users = members_collection.update_one({'_id': ObjectId(result.inserted_id)}, {
+                            '$push': {'User_ids': find_user['_id']}
+                        }, upsert=True)
+                        return {"status": f"Partner- {details['name']} added",
+                                'message': 'Temporary password successfully sent to your email'}
+                else:
+                    raise HTTPException(status_code=500, detail="Failed to insert data")
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Invalid token or user not authorized')
     else:
         raise HTTPException(status_code=401, detail=token)
 
@@ -189,54 +193,58 @@ async def update_partner(member: Members, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         edit_members = member.dict(exclude_none=True)
-        # if payload['role'] in ['org-admin', 'admin']:
-        member = members_collection.find_one({'email': edit_members["email"]})
-        if member:
-            edit_members['updated_at'] = datetime.utcnow()
-            edit_members.pop('role')
-            result = members_collection.update_one({"_id": member["_id"]}, {"$set": edit_members})
-            if result:
-                return {"message": "Partner updated successfully"}
-            elif result.modified_count == 0:
-                raise HTTPException(status_code=500, detail="Failed to apply changes.")
+        if payload['role'] in ['org-admin', 'admin', 'partner']:
+            member = members_collection.find_one({'email': edit_members["email"]})
+            if member:
+
+                edit_members['updated_at'] = datetime.utcnow()
+                edit_members.pop('role')
+                result = members_collection.update_one({"_id": member["_id"]}, {"$set": edit_members})
+                if result:
+                    return {"message": "Partner updated successfully"}
+                elif result.modified_count == 0:
+                    raise HTTPException(status_code=500, detail="Failed to apply changes.")
+                else:
+                    raise HTTPException(status_code=400,
+                                        detail=f"Customer {edit_members['email']} -Unable to update information")
+            # else:
+            #     member = members_collection.find_one({'email': edit_members["email"]})
+            #     print(member)
+            #     edit_members.pop('role')
+            #     if member:
+            #         edit_members['pending_changes'] = {
+            #             **edit_members,
+            #             'updated_at': datetime.utcnow()
+            #         }
+            #         result = members_collection.update_one(
+            #             {'_id': member['_id']},
+            #             {'$set': {'pending_changes': edit_members['pending_changes']}}
+            #         )
+            #
+            #         if result.modified_count == 0:
+            #             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+            #                                 detail=f'Unable to queue update for this customer.')
+            #
+            #         # Notify admin about pending changes
+            #         customer_request = {'name': member['email'], 'fields': str(edit_members['pending_changes'])}
+            #         edit_members['pending_changes'].pop('updated_at')
+            #         message = generate_html_message(edit_members['pending_changes'])
+            #         print(message)
+            #         admin_email = "giri1208srinivas@gmail.com"
+            #         subject = f"Approval Required: Changes to Customer {member['email']}"
+            #         body = f"Pending changes for customer:\n\n{edit_members['pending_changes']}"
+            #
+            #         await Email(subject, admin_email, 'customer_request', message).send_email()
+            #         return {'status': f'Partner update queued for approval - {member["name"]}'}
+
             else:
-                raise HTTPException(status_code=400,
-                                    detail=f"Customer {edit_members['email']} -Unable to update information")
-        # else:
-        #     member = members_collection.find_one({'email': edit_members["email"]})
-        #     print(member)
-        #     edit_members.pop('role')
-        #     if member:
-        #         edit_members['pending_changes'] = {
-        #             **edit_members,
-        #             'updated_at': datetime.utcnow()
-        #         }
-        #         result = members_collection.update_one(
-        #             {'_id': member['_id']},
-        #             {'$set': {'pending_changes': edit_members['pending_changes']}}
-        #         )
-        #
-        #         if result.modified_count == 0:
-        #             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-        #                                 detail=f'Unable to queue update for this customer.')
-        #
-        #         # Notify admin about pending changes
-        #         customer_request = {'name': member['email'], 'fields': str(edit_members['pending_changes'])}
-        #         edit_members['pending_changes'].pop('updated_at')
-        #         message = generate_html_message(edit_members['pending_changes'])
-        #         print(message)
-        #         admin_email = "giri1208srinivas@gmail.com"
-        #         subject = f"Approval Required: Changes to Customer {member['email']}"
-        #         body = f"Pending changes for customer:\n\n{edit_members['pending_changes']}"
-        #
-        #         await Email(subject, admin_email, 'customer_request', message).send_email()
-        #         return {'status': f'Partner update queued for approval - {member["name"]}'}
-
+                raise HTTPException(status_code=404, detail=f"Partner {edit_members['email']} does not exist")
         else:
-            raise HTTPException(status_code=404, detail=f"Partner {edit_members['email']} does not exist")
-
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Invalid token or user not authorized')
     else:
-        raise HTTPException(status_code=401, detail=token)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail='Invalid token or user not authorized')
 
 
 @members_router.post("/admin/approve/{partner_id}")
@@ -351,17 +359,20 @@ async def forgot_password(request: ForgotPasswordRequest):
 
     if not member:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-
-    otp = generate_otp()
-    otp_expiration = datetime.now() + timedelta(minutes=10)  # OTP valid for 10 minutes
-    members_collection.update_one(
-        {"_id": member["_id"]},
-        {"$set": {"otp": otp, "otp_expires_at": otp_expiration}}
-    )
-    email_subject = "Password Reset OTP"
-    email_body = f"Your OTP for password reset is: <b>{otp}</b>. It is valid for 10 minutes."
-    await Email(otp['reset_otp'], request.email, 'reset', email_body).send_email()
-    return {"message": "OTP sent to your email"}
+    if member['role'] == 'partner':
+        otp = generate_otp()
+        otp_expiration = datetime.now() + timedelta(minutes=10)  # OTP valid for 10 minutes
+        members_collection.update_one(
+            {"_id": member["_id"]},
+            {"$set": {"otp": otp, "otp_expires_at": otp_expiration}}
+        )
+        email_subject = "Password Reset OTP"
+        email_body = f"Your OTP for password reset is: <b>{otp}</b>. It is valid for 10 minutes."
+        await Email(otp['reset_otp'], request.email, 'reset', email_body).send_email()
+        return {"message": "OTP sent to your email"}
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail='User not authorized')
 
 
 @members_router.post("/member/verify-otp")
@@ -370,14 +381,17 @@ async def verify_otp(request: VerifyOtpRequest):
 
     if not member:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-    if member["otp"]['reset_otp'] != request.otp or member["otp_expires_at"] < datetime.now():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OTP")
-    new_hashed_password = hash_password(request.new_password)
-    members_collection.update_one(
-        {"_id": member["_id"]},
-        {"$set": {"password": new_hashed_password}, "$unset": {"otp": "", "otp_expires_at": ""}}
-    )
-    return {"message": "Password reset successfully"}
+    if member['role'] == 'partner':
+        if member["otp"]['reset_otp'] != request.otp or member["otp_expires_at"] < datetime.now():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OTP")
+        new_hashed_password = hash_password(request.new_password)
+        members_collection.update_one(
+            {"_id": member["_id"]},
+            {"$set": {"password": new_hashed_password}, "$unset": {"otp": "", "otp_expires_at": ""}}
+        )
+        return {"message": "Password reset successfully"}
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail='User not authorized')
 
 
 @members_router.post('/member/login')
@@ -385,39 +399,42 @@ async def login(payload: LoginMemberSchema, response: Response):
     # Check if the user exist
 
     db_user = members_collection.find_one({'email': payload.email.lower()})
-    print(db_user)
-    if not db_user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail='User does not Registered')
-    if db_user['status'] == 'approved':
-        user = customerEntity(db_user)
-        print(user)
-        ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        REFRESH_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        # Check if user verified his email
-        if not user['verified']:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail='Please verify your email address')
-
-        if not verify_password(payload.password, user['password']):
+    if db_user['role'] == 'partner':
+        if not db_user:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                detail='Incorrect Email or Password')
+                                detail='User does not Registered')
+        if db_user['status'] == 'approved':
+            user = customerEntity(db_user)
+            print(user)
+            ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            REFRESH_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            # Check if user verified his email
+            # if not user['verified']:
+            #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+            #                         detail='Please verify your email address')
 
-        # Create access token
-        access_token = user_utils.create_access_token(user['email'], user['name'], 'Customer')
-        # Create refresh token
-        refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'Customer')
+            if not verify_password(payload.password, user['password']):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                    detail='Incorrect Email or Password')
 
-        # Store refresh and access tokens in cookie
-        response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
-                            ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
-        response.set_cookie('refresh_token', refresh_token,
-                            REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
-        response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
-                            ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, False, 'none')
+            # Create access token
+            access_token = user_utils.create_access_token(user['email'], user['name'], 'partner')
+            # Create refresh token
+            refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'partner')
 
-        # Send both access
-        return {'status': 'success', 'user': user['name'], 'access_token': access_token}
+            # Store refresh and access tokens in cookie
+            response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
+                                ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
+            response.set_cookie('refresh_token', refresh_token,
+                                REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
+            response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
+                                ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, False, 'none')
+
+            # Send both access
+            return {'status': 'success', 'user': user['name'], 'access_token': access_token}
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='User not authorized')
     else:
         raise HTTPException(status_code=401,
                             detail='User does not approved or disabled user')

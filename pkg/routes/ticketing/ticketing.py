@@ -46,7 +46,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         ticket_doc["status"] = "open"
         ticket_doc["created_at"] = datetime.utcnow()
         customer_details = customers_collection.find_one({'email': payload['email']})
-        ticket_doc['Customer'] = str(customer_details['_id'])
+        ticket_doc['customer'] = str(customer_details['_id'])
         ticket_doc["customer_name"] = customer_details['name']
         subject = f"Query Raised: Request from  {customer_details['email']}"
         body = f"Description:\n\n{ticket_doc['description']}"
@@ -72,7 +72,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         ticket_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
         # return ticket_doc
         ticket_info = {"ticket_id": ticket_doc["_id"], "status": ticket_doc["status"],
-                       "created_at": ticket_doc["created_at"], "created_by": ticket_doc['Customer']}
+                       "created_at": ticket_doc["created_at"], "created_by": ticket_doc['customer']}
         update_customer = customers_collection.update_one({'_id': ObjectId(customer_details['_id'])},
                                                           {'$set': {'tickets': ticket_info}})
 
@@ -86,7 +86,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
 async def get_ticket(ticket_id: str, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
-        if payload['role'] == 'Customer':
+        if payload['role'] == 'customer':
             details = customers_collection.find_one({'email': payload['email']})
         elif payload['role'] == 'partner':
             details = member_collections.find_one({'email': payload['email']})
@@ -134,7 +134,7 @@ async def get_all_ticket(token: str = Depends(val_token)):
 # async def initiate_ticket(ticket_id: str, token: str = Depends(val_token)):
 #     if token[0] is True:
 #         payload = token[1]
-#         if payload['role'] == 'Customer':
+#         if payload['role'] == 'customer':
 #             details = customers_collection.find_one({'email': payload['email']})
 #             sender_id = str(details['id'])
 #         elif payload['role'] == 'partner':
@@ -148,10 +148,10 @@ async def get_all_ticket(token: str = Depends(val_token)):
 #
 #         ticket = await get_document_by_id_byrequester(ticket_id, str(details['_id']), payload['role'])
 #         if  payload['role'] in ['admin', 'org-admin']:
-#             receiver_id = ticket['Customer']
+#             receiver_id = ticket['customer']
 #         elif payload['role'] =='partner':
-#             receiver_id = ticket['Customer']
-#         elif payload['role'] == 'Customer':
+#             receiver_id = ticket['customer']
+#         elif payload['role'] == 'customer':
 #             if
 #
 #         result = ticket_collection.update_one(
@@ -175,7 +175,7 @@ async def create_chat_message(
     # message_doc = message.dict()
     if token[0] is True:
         payload = token[1]
-        if payload['role'] == 'Customer':
+        if payload['role'] == 'customer':
             details = customers_collection.find_one({'email': payload['email']})
             message_doc['sender_id'] = str(details['_id'])
             message_doc['sender_name'] = details['name']
@@ -261,7 +261,7 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
         payload = token[1]
 
         role_to_collection = {
-            'Customer': customers_collection,
+            'customer': customers_collection,
             'partner': member_collections,
             'org-admin': user_collection,
             'admin': user_collection
@@ -320,7 +320,7 @@ async def close_chat_message(ticket_id: str, message: ChatMessageCreate, token: 
     print(token)
     if token[0] is True:
         payload = token[1]
-        if payload['role'] == 'Customer':
+        if payload['role'] == 'customer':
             details = customers_collection.find_one({'email': payload['email']})
         elif payload['role'] == 'partner':
             details = member_collections.find_one({'email': payload['email']})
@@ -355,7 +355,7 @@ async def ticket_byloginuser(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         print(payload['role'], payload['email'])
-        if payload['role'] == 'Customer':
+        if payload['role'] == 'customer':
             details = customers_collection.find_one({'email': payload['email']})
         elif payload['role'] == 'partner':
             details = member_collections.find_one({'email': payload['email']})
@@ -386,7 +386,7 @@ async def get_all_ticket_role(role, userid, token: str = Depends(val_token)):
 
         if payload['role'] in ['org-admin', "admin"]:
             if user:
-                if role == 'Customer':
+                if role == 'customer':
                     details = customers_collection.find_one({'_id': ObjectId(userid)})
                 elif role == 'partner':
                     details = member_collections.find_one({'_id': ObjectId(userid)})

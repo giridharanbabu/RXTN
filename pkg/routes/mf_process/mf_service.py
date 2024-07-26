@@ -31,7 +31,7 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
     mf_request = mf_request.dict()
     if token[0] is True:
         payload = token[1]
-        if payload['role'] == 'Customer':
+        if payload['role'] == 'customer':
             customer = customers_collection.find_one({'email': payload["email"]})
             message = generate_html_message(mf_request)
             mf_request['pending_changes'] = {

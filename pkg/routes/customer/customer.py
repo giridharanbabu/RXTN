@@ -48,7 +48,8 @@ async def customer_register(details):
     # else:
     #     # If 'partner_id' is not provided or is empty
     #     partner_details = partner_details
-    details['role'] = "customer"
+    details['role'] = "Customer"
+    details['verified'] = True
     # Generate and hash a temporary password
     temp_password = generate_temp_password()
     hashed_temp_password = hash_password(temp_password)
@@ -77,17 +78,21 @@ async def customer_register(details):
 @customer_router.post("/customer/register")
 async def create_customer(customer: Customer):
     details = customer.dict()
-    customer_collection = database.get_collection('customers')
-    print(customer_collection)
-    customer = customers_collection.find_one({'email': details["email"]})
-    try:
-        if customer:
-            raise HTTPException(status_code=409, detail=f"Customer Email- {customer['email']} Exists")
-        else:
-            print("---")
-            return await customer_register(details)
-    except bson.errors.InvalidId:
-        raise HTTPException(status_code=400, detail="Unable to update Customer details")
+    if details['role'] == 'customer':
+        customer_collection = database.get_collection('customers')
+        print(customer_collection)
+        customer = customers_collection.find_one({'email': details["email"]})
+
+        try:
+            if customer:
+                raise HTTPException(status_code=409, detail=f"Customer Email- {customer['email']} Exists")
+            else:
+                print("---")
+                return await customer_register(details)
+        except bson.errors.InvalidId:
+            raise HTTPException(status_code=400, detail="Unable to update Customer details")
+    else:
+        raise HTTPException(status_code=400, detail="Enter proper role - Customer")
 
 
 #
@@ -125,30 +130,35 @@ async def login(payload: LoginCustomerSchema, response: Response):
     if not db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail='User does not Registered')
-    user = customerEntity(db_user)
-    ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    REFRESH_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    # Check if user verified his email
+    print(db_user)
+    if db_user['role'] == 'customer':
+        user = customerEntity(db_user)
+        ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        REFRESH_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        # Check if user verified his email
 
-    if not verify_password(payload.password, user['password']):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail='Incorrect Email or Password')
+        if not verify_password(payload.password, user['password']):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail='Incorrect Email or Password')
 
-    # Create access token
-    access_token = user_utils.create_access_token(user['email'], user['name'], 'Customer')
-    # Create refresh token
-    refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'Customer')
+        # Create access token
+        access_token = user_utils.create_access_token(user['email'], user['name'], 'customer')
+        # Create refresh token
+        refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'customer')
 
-    # Store refresh and access tokens in cookie
-    response.set_cookie('rxtn_customer_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
-                        ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
-    response.set_cookie('refresh_token', refresh_token,
-                        REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
-    response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
-                        ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, False, 'none')
+        # Store refresh and access tokens in cookie
+        response.set_cookie('rxtn_customer_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
+                            ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
+        response.set_cookie('refresh_token', refresh_token,
+                            REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
+        response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
+                            ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, False, 'none')
 
-    # Send both access
-    return {'status': 'success', 'user': user['name'], 'access_token': access_token}
+        # Send both access
+        return {'status': 'success', 'user': user['name'], 'access_token': access_token}
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail='Invalid token or user not authorized')
 
 
 @customer_router.get("/customer/me")
@@ -159,7 +169,11 @@ async def user_login(request: Request):
         raise HTTPException(status_code=400, detail="Token not found in cookies")
     else:
         payload = jwt.decode(access_token, settings.SECRET, algorithms=[settings.ALGORITHM])
-        return payload
+        if payload['role'] == 'customer':
+            return payload
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Invalid token or user not authorized')
 
 
 # List partners route
@@ -185,11 +199,11 @@ async def list_customers(token: str = Depends(val_token)):
                                 name=partner_information['name'],
                                 email=partner_information['email'],
                                 role=partner_information.get('role', ""),
-                                phone = partner_information.get('partner_user_id', None)
+                                phone=partner_information.get('partner_user_id', None)
                             )
                             customer['partner'] = member.dict()
-                    customer.pop('password',None)
-                    customer.pop('old_passwords',None)
+                    customer.pop('password', None)
+                    customer.pop('old_passwords', None)
                     customers.append(customer)
 
                 return customers
@@ -204,32 +218,33 @@ async def list_customers(token: str = Depends(val_token)):
 @customer_router.get("/customer/info", response_model=CustomerResponse)
 async def update_user(token: str = Depends(val_token)):
     if token[0] is True:
-        print(token[1])
         payload = token[1]
-        customer = customers_collection.find_one({'email': payload["email"]})
-        print(customer)
-        if customer:
-            customer['id'] = str(customer['_id'])
-            if customer['partner_id']:
-                partner_information = member_collections.find_one({"_id": ObjectId(customer['partner_id'][0])})
-                if partner_information:
-
-                    member = PartnerResponse(
-                        id=str(customer['partner_id'][0]),
-                        name=partner_information['name'],
-                        email=partner_information['email'],
-                        role=partner_information.get('role', ""),
-                        phone =partner_information.get('partner_user_id', None)
-                    )
-                    customer['partner'] = member.dict()
-            customer['created_at'] = str(customer['created_at'])
-            return json.loads(json_util.dumps(customer))
-        # Check if the user is found and updated
+        if payload['role'] == 'customer':
+            customer = customers_collection.find_one({'email': payload["email"]})
+            print(customer)
+            if customer:
+                customer['id'] = str(customer['_id'])
+                if customer['partner_id']:
+                    partner_information = member_collections.find_one({"_id": ObjectId(customer['partner_id'][0])})
+                    if partner_information:
+                        member = PartnerResponse(
+                            id=str(customer['partner_id'][0]),
+                            name=partner_information['name'],
+                            email=partner_information['email'],
+                            role=partner_information.get('role', ""),
+                            phone=partner_information.get('partner_user_id', None)
+                        )
+                        customer['partner'] = member.dict()
+                customer['created_at'] = str(customer['created_at'])
+                return json.loads(json_util.dumps(customer))
+            # Check if the user is found and updated
+            else:
+                raise HTTPException(status_code=404, detail="Customer not found")
         else:
-            raise HTTPException(status_code=404, detail="Customer not found")
-
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Invalid token or user not authorized')
     else:
-        raise HTTPException(status_code=401, detail=token)
+        raise HTTPException(status_code=401, detail='Invalid token')
 
 
 def generate_html_message(changes: dict) -> str:
@@ -244,60 +259,65 @@ def generate_html_message(changes: dict) -> str:
 async def update_customer(edit_customer: EditCustomer, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
-        customer_collection = database.get_collection('customers')
-        edit_customer = edit_customer.dict(exclude_none=True)
-        # if payload['role'] in ['org-admin', 'admin']:
-        customer = customer_collection.find_one({'email': edit_customer["email"]})
-        if customer:
-            edit_customer['updated_at'] = datetime.utcnow()
-            result = customer_collection.update_one({"_id": customer["_id"]}, {"$set": edit_customer})
-            if result:
-                return {"message": "- {customer['name']} updated successfully"}
-        # else:
-        #
-        #     customer = customer_collection.find_one({'email': edit_customer["email"]})
-        #     print(customer)
-        #     if customer:
-        #         result = customers_collection.update_one(
-        #             {'_id': ObjectId(customer_id)},
-        #             {'$set': pending_changes, '$unset': {'pending_changes': ""}}
-        #         )
-            elif result.modified_count == 0:
-                raise HTTPException(status_code=500, detail="Failed to apply changes.")
+        if payload['role'] in ['org-admin','admin','customer']:
+            customer_collection = database.get_collection('customers')
+            edit_customer = edit_customer.dict(exclude_none=True)
+            # if payload['role'] in ['org-admin', 'admin']:
+            customer = customer_collection.find_one({'email': edit_customer["email"]})
+
+            if customer:
+                edit_customer['updated_at'] = datetime.utcnow()
+                result = customer_collection.update_one({"_id": customer["_id"]}, {"$set": edit_customer})
+                if result:
+                    return {"message": "- {customer['name']} updated successfully"}
+                # else:
+                #
+                #     customer = customer_collection.find_one({'email': edit_customer["email"]})
+                #     print(customer)
+                #     if customer:
+                #         result = customers_collection.update_one(
+                #             {'_id': ObjectId(customer_id)},
+                #             {'$set': pending_changes, '$unset': {'pending_changes': ""}}
+                #         )
+                elif result.modified_count == 0:
+                    raise HTTPException(status_code=500, detail="Failed to apply changes.")
+                else:
+                    raise HTTPException(status_code=400,
+                                        detail=f"Customer {edit_customer['email']} -Unable to update information")
+                    # message = "Changes approved and applied successfully."
+                    # edit_customer['pending_changes'] = {
+                    #     **edit_customer,
+                    #     'updated_at': datetime.utcnow()
+                    # }
+                    # result = customer_collection.update_one(
+                    #     {'_id': customer['_id']},
+                    #     {'$set': {'pending_changes': edit_customer['pending_changes']}}
+                    # )
+                    #
+                    # if result.modified_count == 0:
+                    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                    #                         detail=f'Unable to queue update for this customer.')
+                    #
+                    # # Notify admin about pending changes
+                    # customer_request = {'name': customer['email'], 'fields': str(edit_customer['pending_changes'])}
+                    # edit_customer['pending_changes'].pop('updated_at')
+                    # message = generate_html_message(edit_customer['pending_changes'])
+                    # print(message)
+                    # admin_email = "giri1208srinivas@gmail.com"
+                    # subject = f"Approval Required: Changes to Customer {customer['email']}"
+                    # body = f"Pending changes for customer:\n\n{edit_customer['pending_changes']}"
+                    # if customer['partner_id']:
+                    #     for partner in customer['partner_id']:
+                    #         member = members_collection.find_one({'_id': ObjectId(partner)})
+                    #         await Email(subject, member['email'], 'customer_request', message).send_email()
+                    #
+                    # await Email(subject, admin_email, 'customer_request', message).send_email()
+
             else:
-                raise HTTPException(status_code=400, detail=f"Customer {edit_customer['email']} -Unable to update information")
-                # message = "Changes approved and applied successfully."
-                # edit_customer['pending_changes'] = {
-                #     **edit_customer,
-                #     'updated_at': datetime.utcnow()
-                # }
-                # result = customer_collection.update_one(
-                #     {'_id': customer['_id']},
-                #     {'$set': {'pending_changes': edit_customer['pending_changes']}}
-                # )
-                #
-                # if result.modified_count == 0:
-                #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                #                         detail=f'Unable to queue update for this customer.')
-                #
-                # # Notify admin about pending changes
-                # customer_request = {'name': customer['email'], 'fields': str(edit_customer['pending_changes'])}
-                # edit_customer['pending_changes'].pop('updated_at')
-                # message = generate_html_message(edit_customer['pending_changes'])
-                # print(message)
-                # admin_email = "giri1208srinivas@gmail.com"
-                # subject = f"Approval Required: Changes to Customer {customer['email']}"
-                # body = f"Pending changes for customer:\n\n{edit_customer['pending_changes']}"
-                # if customer['partner_id']:
-                #     for partner in customer['partner_id']:
-                #         member = members_collection.find_one({'_id': ObjectId(partner)})
-                #         await Email(subject, member['email'], 'customer_request', message).send_email()
-                #
-                # await Email(subject, admin_email, 'customer_request', message).send_email()
-
+                raise HTTPException(status_code=404, detail=f"Customer {edit_customer['email']} does not exist")
         else:
-            raise HTTPException(status_code=404, detail=f"Customer {edit_customer['email']} does not exist")
-
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Invalid token or user not authorized')
     else:
         raise HTTPException(status_code=401, detail=token)
 
@@ -343,8 +363,8 @@ async def update_customer(edit_customer: EditCustomer, token: str = Depends(val_
 @customer_router.post("/reset-password")
 async def reset_password(request: PasswordResetRequest):
     # Find the customer by email
-    customer = customers_collection.find_one({"email": request.email})
 
+    customer = customers_collection.find_one({"email": request.email})
     if not customer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
 
@@ -391,7 +411,7 @@ async def forgot_password(request: ForgotPasswordRequest):
     email_subject = "Password Reset OTP"
     email_body = f"Your OTP for password reset is: <b>{otp}</b>. It is valid for 10 minutes."
 
-    await Email(otp['reset_otp'], request.email,'reset', email_body).send_email()
+    await Email(otp['reset_otp'], request.email, 'reset', email_body).send_email()
 
     return {"message": "OTP sent to your email"}
 
