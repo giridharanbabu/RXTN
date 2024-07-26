@@ -65,7 +65,8 @@ async def create_user(payload: CreateMemberSchema):
                              "Verification_expireAt": datetime.utcnow() + timedelta(
                                  minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
                              "updated_at": datetime.utcnow(), "status": "pending"}})
-                token = generate_otp_token(payload,hotp_v.at(0) )
+                token = generate_otp_token(payload,hotp_v.at(0))
+                token = str(token, 'utf-8')
                 message =f"https://rxtn.onrender.com/members/verifyemail/{token}"
                 await Email(message, payload.email, 'verification').send_email()
             except Exception as error:
