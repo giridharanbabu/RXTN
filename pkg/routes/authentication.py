@@ -56,7 +56,7 @@ async def verify_otp(otp: str):
     result = register.find_one_and_update(
         filter={
             "reset_otp_exp": {"$gt": expires_delta},
-            "reset_otp":  otp
+            "reset_otp": otp
         },
         update={"$set": {"reset_otp": None}}, new=True, return_document=True)  # Return the updated document
     if not result:
@@ -152,34 +152,48 @@ async def verify_me(email: str, otp: str):
     # hotp = pyotp.HOTP(verification_code)
     # print(hotp.at(0))
 
-    result = register.find_one_and_update({"email":email, "verification_code": otp}, {
-        "$set": {"verification_code": None, "verified": True, "updated_at": datetime.utcnow()}}, new=True)
-    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail='Invalid verification code or account already verified')
-
-    return {
-        "status": "success",
-        "access_token": access_token,
-        "message": "Account verified successfully"
-    }
-
-
-@auth_router.get('/members/verifyemail/{email}/{otp}')
-async def verify_partner(email: str, otp: str):
-    register = database.get_collection('partners')
-
     result = register.find_one_and_update({"email": email, "verification_code": otp}, {
         "$set": {"verification_code": None, "verified": True, "updated_at": datetime.utcnow()}}, new=True)
+    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
     if not result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail='Invalid verification code or account already verified')
-    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
-
 
     return {
         "status": "success",
         "access_token": access_token,
         "message": "Account verified successfully"
     }
+
+
+@auth_router.get('/members/verifyemail/{token}')
+async def verify_partner(token):
+    payload = jwt.decode(token, settings.SECRET, algorithms=[settings.ALGORITHM])
+    print(payload)
+    register = database.get_collection('partners')
+
+    result = register.find_one_and_update({"email": payload['email'], "verification_code": payload['otp']}, {
+        "$set": {"verification_code": None, "verified": True, "updated_at": datetime.utcnow()}}, new=True)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail='Invalid verification code or account already verified')
+    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
+
+    return {
+        "status": "success",
+        "access_token": access_token,
+        "message": "Account verified successfully"
+    }
+
+
+def generate_otp_token(user, otp, expires_delta=None):
+    from datetime import datetime, timedelta
+    if expires_delta is not None:
+        expires_delta = datetime.utcnow() + expires_delta
+    else:
+        expires_delta = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    token_data = {
+        "exp": expires_delta, 'name': user.name, 'email': user.email, 'role': user.role, 'otp': otp
+    }
+    token = jwt.encode(token_data, settings.SECRET)
+    return token

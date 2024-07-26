@@ -8,7 +8,7 @@ from pkg.routes.user_registration import user_utils
 from pkg.routes.customer.customer_utils import generate_temp_password, hash_password, generate_html_message, \
     verify_password
 from pkg.database.database import database
-from pkg.routes.authentication import val_token
+from pkg.routes.authentication import val_token, generate_otp_token
 from pkg.routes.emails import Email
 from random import randbytes
 import hashlib, base64
@@ -65,7 +65,9 @@ async def create_user(payload: CreateMemberSchema):
                              "Verification_expireAt": datetime.utcnow() + timedelta(
                                  minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
                              "updated_at": datetime.utcnow(), "status": "pending"}})
-                await Email(hotp_v.at(0), payload.email, 'verification').send_email()
+                token = generate_otp_token(payload,hotp_v.at(0) )
+                message =f"https://rxtn.onrender.com/members/verifyemail/{token}"
+                await Email(message, payload.email, 'verification').send_email()
             except Exception as error:
                 members_collection.find_one_and_update({"_id": result.inserted_id}, {
                     "$set": {"verification_code": None, "updated_at": datetime.utcnow()}, "status": "pending"})
