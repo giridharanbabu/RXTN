@@ -67,3 +67,4 @@ class CloseTicket(BaseModel):
     close_description: str
     closed_by: str
     role: str
+    resolved_date: Optional[datetime]

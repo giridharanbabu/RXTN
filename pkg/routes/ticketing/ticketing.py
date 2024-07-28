@@ -338,12 +338,13 @@ async def close_chat_message(ticket_id: str, message: ChatMessageCreate, token: 
         update_ticket_status = ticket_collection.update_one(
             {'_id': ObjectId(ticket_id)},
             {'$set': {"status": "closed", "current_status": "closed", "close_description": message_doc['content'],
-                      "closed_by": str(details['_id']), "role": payload['role']}}
+                      "closed_by": str(details['_id']), "role": payload['role'], "resolved_date": datetime.now()}}
         )
         message_doc['close_description'] = message_doc['content']
         message_doc['closed_by'] = str(details['_id'])
         message_doc['role'] = payload['role']
         message_doc['status'] = "closed"
+        message_doc['resolved_date'] = datetime.now()
         message_doc["_id"] = str(update_ticket_status.upserted_id)  # Convert ObjectId to string for response
         return CloseTicket(**message_doc)
     else:
