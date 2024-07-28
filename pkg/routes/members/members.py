@@ -65,10 +65,10 @@ async def create_user(payload: CreateMemberSchema):
                              "Verification_expireAt": datetime.utcnow() + timedelta(
                                  minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
                              "updated_at": datetime.utcnow(), "status": "pending"}})
-                token = generate_otp_token(payload,hotp_v.at(0))
+                token = generate_otp_token(payload, hotp_v.at(0))
                 token = str(token)
-                message =f"https://rxtn.onrender.com/members/verifyemail/{token}"
-                await Email(f"verification Token", payload.email, 'verification', message= message).send_email()
+                message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
+                await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
             except Exception as error:
                 members_collection.find_one_and_update({"_id": result.inserted_id}, {
                     "$set": {"verification_code": None, "updated_at": datetime.utcnow()}, "status": "pending"})
@@ -80,6 +80,28 @@ async def create_user(payload: CreateMemberSchema):
                                 detail='There was an error registering user')
 
 
+@members_router.post("/partner/verification/approval")
+async def partner_verification_code_generation(partner_id: str, token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] in ['admin', 'org-admin']:
+            member = members_collection.find_one({'_id': ObjectId(partner_id)})
+            if member:
+                payload = member.dict()
+                token = generate_otp_token(payload, hotp_v.at(0))
+                token = str(token)
+                message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
+                await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
+            else:
+                raise HTTPException(status_code=404, detail='Partner not Found')
+
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Invalid token or user not authorized')
+    else:
+        raise HTTPException(status_code=401, detail='Invalid token or user not authorized')
+
+
 @members_router.post("/partner/register")
 async def create_member(member: Members, token: str = Depends(val_token)):
     if token[0] is True:
@@ -88,7 +110,8 @@ async def create_member(member: Members, token: str = Depends(val_token)):
             details = member.dict()
             member = members_collection.find_one({'email': details["email"]})
             if member:
-                raise HTTPException(status_code=409, detail=f"Partner {member['name']} Exists with Email {member['email']}")
+                raise HTTPException(status_code=409,
+                                    detail=f"Partner {member['name']} Exists with Email {member['email']}")
             search_criteria = {"email": token[1]['email'], "members": {
                 "$elemMatch": {
                     "member_name": details['name']
@@ -113,7 +136,8 @@ async def create_member(member: Members, token: str = Depends(val_token)):
             for document in cursor:
                 document_list.append(document)
             if document_list:
-                raise HTTPException(status_code=409, detail=f"Partner {member['name']} Exists with Email {member['email']}")
+                raise HTTPException(status_code=409,
+                                    detail=f"Partner {member['name']} Exists with Email {member['email']}")
             else:
                 find_user = user_collection.find_one({'email': token[1]['email']})
                 result = members_collection.insert_one(details)
@@ -136,6 +160,52 @@ async def create_member(member: Members, token: str = Depends(val_token)):
                                 detail='Invalid token or user not authorized')
     else:
         raise HTTPException(status_code=401, detail=token)
+
+
+@members_router.post("/verification/request")
+async def verification_request(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] in ['partner']:
+            member = members_collection.find_one({'email': payload['email']})
+            if member:
+                query = {"members.member_id": ObjectId(member['_id'])}
+                projection = {"members.$": 1}
+                users_detail = user_collection.find_one(query, projection)
+                email_body = {'name': member['name'], 'fields': {"msg": "token resuested"}}
+                await Email('Verification Request for Code Regeneration', users_detail['email'], 'edit_request',
+                            email_body).send_email()
+                return {'status': 'success', 'message': 'Request sent successfully'}
+            else:
+                raise HTTPException(status_code=404, detail="Partner Not Found")
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Invalid token or user not authorized')
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail='Invalid token or user not authorized')
+
+
+
+
+@members_router.get("/partner/info", response_model=MembersResponse)
+async def get_partner_info(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] == 'partner':
+            partner = members_collection.find_one({'email': payload["email"]})
+            if partner:
+                partner['id'] = str(partner['_id'])
+
+                return partner
+            # Check if the user is found and updated
+            else:
+                raise HTTPException(status_code=404, detail="partner not found")
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Invalid token or user not authorized')
+    else:
+        raise HTTPException(status_code=401, detail='Invalid token')
 
 
 #
@@ -276,6 +346,8 @@ async def approve_partner(partner_id: str, approval: AdminApprovalRequest, token
     else:
         raise HTTPException(status_code=401, detail="Invalid token")
         #
+
+
 # @members_router.post("/admin/approve/{partner_id}")
 # async def approve_customer_edit(customer_id: str, approval: AdminApprovalRequest):
 #     if not ObjectId.is_valid(customer_id):
@@ -315,6 +387,7 @@ async def approve_partner(partner_id: str, approval: AdminApprovalRequest, token
 def parse_object_id(document):
     """Convert the '_id' field to a string."""
     if '_id' in document:
+        print(document['_id'])
         document['id'] = str(document['_id'])
         del document['_id']
     return document
@@ -426,7 +499,8 @@ async def login(payload: LoginMemberSchema, response: Response):
             response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
                                 ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
             response.set_cookie('refresh_token', refresh_token,
-                                REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
+                                REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True,
+                                'none')
             response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
                                 ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, False, 'none')
 
