@@ -14,7 +14,7 @@ class Ticket(BaseModel):
     id: Optional[str] = Field(default=None, alias="_id")
     title: str
     description: str
-    Customer: str
+    Customer: Optional['str'] = None
     customer_name: Optional[str] = None
     admin_name: Optional[str] = None
     partner_name: Optional[str] = None
@@ -23,7 +23,7 @@ class Ticket(BaseModel):
     status: str = "open"
     created_at: datetime = Field(default_factory=datetime.utcnow)
     current_status: Optional[str] = None
-    last_message: Field(default_factory=dict)
+    last_message: Field(default_factory=dict) = {}
 
     class Config:
         allow_population_by_field_name = True

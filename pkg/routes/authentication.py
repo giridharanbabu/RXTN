@@ -193,7 +193,7 @@ def generate_otp_token(user, otp, expires_delta=None):
     else:
         expires_delta = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token_data = {
-        "exp": expires_delta, 'name': user.name, 'email': user.email, 'role': user.role, 'otp': otp
+        "exp": expires_delta, 'name': user['name'], 'email': user['email'], 'role': user['role'], 'otp': otp
     }
     token = jwt.encode(token_data, settings.SECRET)
     return token

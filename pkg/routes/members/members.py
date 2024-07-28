@@ -65,7 +65,8 @@ async def create_user(payload: CreateMemberSchema):
                              "Verification_expireAt": datetime.utcnow() + timedelta(
                                  minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
                              "updated_at": datetime.utcnow(), "status": "pending"}})
-                token = generate_otp_token(payload, hotp_v.at(0))
+                payload_token = payload.dict()
+                token = generate_otp_token(payload_token, hotp_v.at(0))
                 token = str(token)
                 message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
                 await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
@@ -87,11 +88,17 @@ async def partner_verification_code_generation(partner_id: str, token: str = Dep
         if payload['role'] in ['admin', 'org-admin']:
             member = members_collection.find_one({'_id': ObjectId(partner_id)})
             if member:
-                payload = member.dict()
-                token = generate_otp_token(payload, hotp_v.at(0))
+                import json
+                payload = {
+                    'name': member['name'],
+                    'email': member['email'],
+                    'role': member['role']
+                }
+                token = generate_otp_token(payload, member['verification_code'])
                 token = str(token)
                 message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
-                await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
+                await Email(f"verification Token", member['email'], 'verification', message=message).send_email()
+                return {"msg": f"verfication sent to Partner {member['email']}"}
             else:
                 raise HTTPException(status_code=404, detail='Partner not Found')
 
@@ -171,11 +178,19 @@ async def verification_request(token: str = Depends(val_token)):
             if member:
                 query = {"members.member_id": ObjectId(member['_id'])}
                 projection = {"members.$": 1}
-                users_detail = user_collection.find_one(query, projection)
-                email_body = {'name': member['name'], 'fields': {"msg": "token resuested"}}
-                await Email('Verification Request for Code Regeneration', users_detail['email'], 'edit_request',
-                            email_body).send_email()
-                return {'status': 'success', 'message': 'Request sent successfully'}
+                print(query)
+                users_detail = user_collection.find_one({"members.member_id": ObjectId(member['_id'])})
+                if users_detail:
+                    body = {'name': member['name']}
+                    await Email('Verification Request for Code Regeneration', users_detail['email'], 'verification_request',
+                                body).send_email()
+                    return {'status': 'success', 'message': 'Request sent successfully'}
+                else:
+                    body = {'name': member['name']}
+                    await Email('Verification Request for Code Regeneration', "giri1208srinivas@gmail.com", 'verification_request',
+                                body).send_email()
+                    return {'status': 'success', 'message': 'Request sent successfully'}
+
             else:
                 raise HTTPException(status_code=404, detail="Partner Not Found")
         else:
