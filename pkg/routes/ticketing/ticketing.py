@@ -196,7 +196,7 @@ async def create_chat_message(
         if ticket is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
         message_doc['ticket_id'] = ticket_id
-        message_doc["created_at"] = datetime.utcnow()
+        message_doc["created_at"] = datetime.now()
 
         # Handle file upload
         print("files", files)
@@ -213,7 +213,7 @@ async def create_chat_message(
         result = chat_messages_collections.insert_one(message_doc)
         ticket_collection.update_one(
             {'_id': ObjectId(ticket_id)},
-            {'$set': { "current_status": payload['role']+"-responded" ,"last_message": {"role":payload['role'] ,"name":details['name'], "id":str(details['_id']) }}}
+            {'$set': { "current_status": payload['role']+"-responded" ,"last_message": {"role":payload['role'] ,"name":details['name'], "id":str(details['_id']),"message": content,"created_time": datetime.now()}}}
         )
         message_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
         return ChatMessage(**message_doc)
