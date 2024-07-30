@@ -205,7 +205,8 @@ async def list_customers(token: str = Depends(val_token)):
                                 name=partner_information['name'],
                                 email=partner_information['email'],
                                 role=partner_information.get('role', ""),
-                                phone=partner_information.get('partner_user_id', None)
+                                phone=partner_information.get('partner_user_id', None),
+                                created_at=str(partner_information.get('created_at', None))
                             )
                             customer['partner'] = member.dict()
                     customer.pop('password', None)
@@ -226,7 +227,8 @@ async def list_customers(token: str = Depends(val_token)):
                                 name=partner_information['name'],
                                 email=partner_information['email'],
                                 role=partner_information.get('role', ""),
-                                phone=partner_information.get('partner_user_id', None)
+                                phone=partner_information.get('partner_user_id', None),
+                                created_at=str(partner_information.get('created_at', None))
                             )
                             customer['partner'] = member.dict()
                             customer.pop('password', None)
@@ -258,7 +260,8 @@ async def update_user(token: str = Depends(val_token)):
                             name=partner_information['name'],
                             email=partner_information['email'],
                             role=partner_information.get('role', ""),
-                            phone=partner_information.get('partner_user_id', None)
+                            phone=partner_information.get('phone', None),
+                            created_at=str(partner_information.get('created_at', None))
                         )
                         customer['partner'] = member.dict()
                 customer['created_at'] = str(customer['created_at'])
@@ -288,6 +291,7 @@ async def update_customer(edit_customer: EditCustomer, token: str = Depends(val_
         if payload['role'] in ['org-admin', 'admin', 'customer']:
             customer_collection = database.get_collection('customers')
             edit_customer = edit_customer.dict(exclude_none=True)
+            edit_customer.pop('partner_id', None)
             # if payload['role'] in ['org-admin', 'admin']:
             customer = customer_collection.find_one({'email': edit_customer["email"]})
 

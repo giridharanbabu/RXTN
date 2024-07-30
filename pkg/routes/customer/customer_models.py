@@ -63,6 +63,8 @@ class PartnerResponse(BaseModel):
     name: str
     email: str
     role: Optional[str]
+    phone: Optional[str]
+    created_at: Optional[str]
 
 
 class CustomerResponse(BaseModel):
@@ -76,7 +78,7 @@ class CustomerResponse(BaseModel):
     gender: Optional[str] = None
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
-    annual_income: Optional[str] = None
+    annual_income: Optional[int] = None
     source_of_income: Optional[str] = None
     marital_status: Optional[str] = None
     pan_number: Optional[str] = None

@@ -102,7 +102,7 @@ class MembersResponse(BaseModel):
     gender: Optional[str] or None = None
     date_of_birth: Optional[str] or None = None
     address: Optional[str] or None = None
-    annual_income: Optional[int] or None = None
+    annual_income: Optional[int] = None
     source_of_income: Optional[str] or None = None
     marital_status: Optional[str] or None = None
     pan_number: Optional[str] or None = None
