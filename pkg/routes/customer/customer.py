@@ -181,16 +181,22 @@ async def user_login(request: Request):
 async def list_customers(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
-        user = user_collection.find_one({'email': payload["email"]})
+        user = []
 
         if payload['role'] in ['org-admin', "admin"]:
-            if user:
-                customers_cursor = customers_collection.find()
-                customers = []
+            user = user_collection.find_one({'email': payload["email"]})
+        elif payload['role'] == 'partner':
+            user = member_collections.find_one({'email': payload["email"]})
+        else:
+            raise HTTPException(status_code=401, detail="Invalid token/Not Authorized")
+        if user:
+            customers_cursor = customers_collection.find()
+            customers = []
 
-                for customer in customers_cursor:
-                    # Convert ObjectId to string if necessary
-                    customer["_id"] = str(customer["_id"])
+            for customer in customers_cursor:
+                # Convert ObjectId to string if necessary
+                customer["_id"] = str(customer["_id"])
+                if payload['role'] in ['org-admin', "admin"]:
                     if customer['partner_id']:
                         partner_information = member_collections.find_one({"_id": ObjectId(customer['partner_id'][0])})
                         if partner_information:
@@ -205,10 +211,30 @@ async def list_customers(token: str = Depends(val_token)):
                     customer.pop('password', None)
                     customer.pop('old_passwords', None)
                     customers.append(customer)
+                elif payload['role'] == 'partner':
 
-                return customers
-            else:
-                raise HTTPException(status_code=401, detail="Invalid token")
+                    print("-------",customer['partner_id'])
+                    if customer['partner_id']:
+                        partner_information = member_collections.find_one({"_id": ObjectId(customer['partner_id'][0])})
+                        print(str(partner_information['_id']))
+                        print(str(user['_id']))
+                        if str(partner_information['_id']) == str(user['_id']):
+                            print(str(partner_information['_id']))
+                            print(str(user['_id']))
+                            member = PartnerResponse(
+                                id=str(customer['partner_id'][0]),
+                                name=partner_information['name'],
+                                email=partner_information['email'],
+                                role=partner_information.get('role', ""),
+                                phone=partner_information.get('partner_user_id', None)
+                            )
+                            customer['partner'] = member.dict()
+                            customer.pop('password', None)
+                            customer.pop('old_passwords', None)
+                            customers.append(customer)
+
+            return customers
+
         else:
             raise HTTPException(status_code=401, detail="User does not have access to view Customer")
     else:
@@ -259,7 +285,7 @@ def generate_html_message(changes: dict) -> str:
 async def update_customer(edit_customer: EditCustomer, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
-        if payload['role'] in ['org-admin','admin','customer']:
+        if payload['role'] in ['org-admin', 'admin', 'customer']:
             customer_collection = database.get_collection('customers')
             edit_customer = edit_customer.dict(exclude_none=True)
             # if payload['role'] in ['org-admin', 'admin']:
