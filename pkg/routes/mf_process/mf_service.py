@@ -36,7 +36,7 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
             message = generate_html_message(mf_request)
             mf_request['pending_changes'] = {
                 **mf_request,
-                'updated_at': datetime.utcnow()
+                'updated_at': datetime.now()
             }
             result = customers_collection.update_one(
                 {'_id': customer['_id']},

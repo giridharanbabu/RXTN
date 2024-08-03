@@ -5,7 +5,7 @@ from typing import List, Optional
 from bson import ObjectId
 import gridfs
 from pkg.routes.authentication import val_token
-from pkg.routes.customer.customer import generate_html_message
+#from pkg.routes.customer.customer import generate_html_message
 from pkg.routes.emails import Email
 from pkg.routes.ticketing.ticket_models import Ticket, TicketCreate, ChatMessage, ChatMessageCreate, CloseTicket
 from pkg.database.database import database
@@ -44,7 +44,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         payload = token[1]
         ticket_doc = ticket.dict()
         ticket_doc["status"] = "open"
-        ticket_doc["created_at"] = datetime.utcnow()
+        ticket_doc["created_at"] = datetime.now()
         customer_details = customers_collection.find_one({'email': payload['email']})
         ticket_doc['customer'] = str(customer_details['_id'])
         ticket_doc["customer_name"] = customer_details['name']
@@ -334,7 +334,7 @@ async def close_chat_message(ticket_id: str, message: ChatMessageCreate, token: 
         if ticket is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
         message_doc['ticket_id'] = ticket_id
-        message_doc["created_at"] = datetime.utcnow()
+        message_doc["created_at"] = datetime.now()
         update_ticket_status = ticket_collection.update_one(
             {'_id': ObjectId(ticket_id)},
             {'$set': {"status": "closed", "current_status": "closed", "close_description": message_doc['content'],

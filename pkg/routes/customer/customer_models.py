@@ -4,10 +4,16 @@ from pydantic import BaseModel, EmailStr, constr
 from bson.objectid import ObjectId
 
 
+class FileMetadata(BaseModel):
+    file_id: str
+    file_name: str
+
+
 class Customer(BaseModel):
     name: str
     email: str
     phone: str
+    photo: Optional[List[FileMetadata]] = []
     partner_id: Optional[list] or None = []
     created_at: datetime or None or ''
     role: str or None = None
@@ -32,6 +38,7 @@ class Customer(BaseModel):
 class EditCustomer(BaseModel):
     name: Optional[str] or None = None
     email: str
+    photo: Optional[List[FileMetadata]] = []
     phone: Optional[str] or None = None
     partner_id: Optional[list] or None = []
     secondary_contact: Optional[str] or None = None
@@ -74,6 +81,7 @@ class CustomerResponse(BaseModel):
     phone: Optional[str]
     created_at: str
     role: str
+    photo: Optional[List[FileMetadata]] = []
     secondary_contact: Optional[str] = None
     gender: Optional[str] = None
     date_of_birth: Optional[str] = None

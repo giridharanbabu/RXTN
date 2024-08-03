@@ -3,77 +3,122 @@ import hashlib
 import json
 from datetime import datetime, timedelta
 from random import randbytes
-from bson import json_util
-from fastapi import HTTPException, status, APIRouter, Request, Depends, Response
+from typing import List, Optional, Dict
+
+import pyotp
+from bson import json_util, ObjectId
+from fastapi import HTTPException, status, APIRouter, Request, Depends, Response, File, UploadFile, Body
 from jose import jwt
 from pkg.routes.user_registration.user_models import CreateUserSchema, LoginUserSchema, PasswordResetRequest, \
-    UserReponse
+    UserResponse, LoginActivitySchema
 from pkg.database.database import database
 from pkg.routes.authentication import val_token, verify_otp
 from pkg.routes.user_registration import user_utils
 from pkg.routes.emails import Email
-from pkg.routes.user_registration.user_utils import generate_otp
+from pkg.routes.user_registration.user_utils import generate_otp, log_user_activity, cleanup_old_logins, \
+    keep_last_three_logins
 from pkg.routes.serializers.userSerializers import userEntity
 from config.config import settings
 
 user_router = APIRouter()
 user_collection = database.get_collection('users')
+customers_collection = database.get_collection('customers')
+member_collections = database.get_collection('partners')
+login_activity_collection = database.get_collection('login_activity')
 user_collection.create_index("expireAt", expireAfterSeconds=10)
 
 
 @user_router.post("/user/register")
 async def create_user(payload: CreateUserSchema):
-    # Check if user already exist
+    # Check if user already exists
     if payload.role in ['org-admin', 'admin', 'partner']:
         find_user = user_collection.find_one({'email': payload.email.lower()})
         if find_user:
-            if find_user['verified'] is False:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                    detail='User Not Verified,Please verify your email address')
+            if not find_user['verified']:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail='User Not Verified, Please verify your email address'
+                )
             else:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                                    detail='Account already exist')
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail='Account already exists'
+                )
         else:
             # Compare password and passwordConfirm
             if payload.password != payload.passwordConfirm:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Passwords do not match')
-            #  Hash the password
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Passwords do not match'
+                )
+
+            # Hash the password
             payload.password = user_utils.hash_password(payload.password)
             del payload.passwordConfirm
             payload.verified = False
             payload.email = payload.email.lower()
-            payload.created_at = datetime.utcnow()
+            payload.created_at = datetime.now()
             payload.updated_at = payload.created_at
-            result = user_collection.insert_one(payload.dict())
+            payload_dict = payload.dict()
+
+            if payload.photo:
+                payload_dict['files'] = []
+                for file in payload.photo:
+                    file_data = await file.read()
+                    file_id = database.store_file(file_data, file.filename)
+                    payload_dict['files'].append({'file_id': str(file_id), 'file_name': file.filename})
+            else:
+                payload_dict['files'] = []
+
+            result = user_collection.insert_one(payload_dict)
             new_user = user_collection.find_one({'_id': result.inserted_id})
+
             if new_user:
                 try:
                     token = randbytes(10)
                     hashedCode = hashlib.sha256()
                     hashedCode.update(token)
                     verification_code = hashedCode.hexdigest()
-                    import pyotp
                     secret = base64.b32encode(bytes(token.hex(), 'utf-8'))
                     verification_code = base64.b32encode(bytes(verification_code, 'utf-8'))
                     hotp_v = pyotp.HOTP(verification_code)
-                    user_collection.find_one_and_update({"_id": result.inserted_id}, {
-                        "$set": {"verification_code": hotp_v.at(0),
-                                 "Verification_expireAt": datetime.utcnow() + timedelta(
-                                     minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
-                                 "updated_at": datetime.utcnow()}})
+                    user_collection.find_one_and_update(
+                        {"_id": result.inserted_id},
+                        {
+                            "$set": {
+                                "verification_code": hotp_v.at(0),
+                                "Verification_expireAt": datetime.now() + timedelta(
+                                    minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
+                                "updated_at": datetime.now()
+                            }
+                        }
+                    )
                     await Email(hotp_v.at(0), payload.email, 'verification').send_email()
                 except Exception as error:
-                    user_collection.find_one_and_update({"_id": result.inserted_id}, {
-                        "$set": {"verification_code": None, "updated_at": datetime.utcnow()}})
-                    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                                        detail='There was an error sending email')
+                    user_collection.find_one_and_update(
+                        {"_id": result.inserted_id},
+                        {
+                            "$set": {
+                                "verification_code": None,
+                                "updated_at": datetime.now()
+                            }
+                        }
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail='There was an error sending email'
+                    )
                 return {'status': 'success', 'message': 'Verification token successfully sent to your email'}
             else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                                    detail='There was an error registering user')
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='There was an error registering user'
+                )
     else:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail='No permission to create User')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='No permission to create User'
+        )
 
 
 @user_router.post('/user/login')
@@ -83,35 +128,44 @@ async def login(payload: LoginUserSchema, response: Response):
     if not db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail='Incorrect Email or Password')
-    user = userEntity(db_user)
-    ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    REFRESH_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    # Check if user verified his email
-    if not user['verified']:
+    if db_user['role'] in ['admin', 'org-admin']:
+        user = userEntity(db_user)
+        ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        REFRESH_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        # Check if user verified his email
+        if not user['verified']:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Please verify your email address')
+
+        # Check if the password is valid
+        if not user_utils.verify_password(payload.password, user['password']):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail='Incorrect Email or Password')
+
+        # Create access token
+        access_token = user_utils.create_refresh_token(user['email'], user['name'], user['role'])
+
+        # Create refresh token
+        refresh_token = user_utils.create_access_token(user['email'], user['name'], user['role'])
+
+        # Store refresh and access tokens in cookie
+        response.set_cookie('access_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,
+                            ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
+        response.set_cookie('refresh_token', refresh_token,
+                            REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, False, True, 'lax')
+        response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
+                            ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, False, False, 'lax')
+        # Log user activity
+        log_user_activity(user['email'], db_user['role'], str(db_user['_id']))
+
+        # Clean up old logins and keep the last 3 logins
+        cleanup_old_logins()
+        keep_last_three_logins(user['email'], db_user['role'], str(db_user['_id']))
+        # Send both access
+        return {'status': 'success', 'access_token': access_token}
+    else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail='Please verify your email address')
-
-    # Check if the password is valid
-    if not user_utils.verify_password(payload.password, user['password']):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail='Incorrect Email or Password')
-
-    # Create access token
-    access_token = user_utils.create_refresh_token(user['email'], user['name'], user['role'])
-
-    # Create refresh token
-    refresh_token = user_utils.create_access_token(user['email'], user['name'], user['role'])
-
-    # Store refresh and access tokens in cookie
-    response.set_cookie('access_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,
-                        ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
-    response.set_cookie('refresh_token', refresh_token,
-                        REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, False, True, 'lax')
-    response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
-                        ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, False, False, 'lax')
-
-    # Send both access
-    return {'status': 'success', 'access_token': access_token}
+                            detail='Invalid token or user not authorized')
 
 
 @user_router.get("/user/me")
@@ -126,27 +180,30 @@ async def user_login(request: Request):
 
 
 @user_router.post("/edit/users")
-async def update_user(new_data: dict, token: str = Depends(val_token)):
-    if token[0] is True:
+async def update_user(
+        new_data: dict = Body(...),
+        token: tuple = Depends(val_token),
+):
+    if token[0]:
         payload = token[1]
-
         user = user_collection.find_one({'email': payload["email"]})
-        if user['role'] == ['org-admin', "admin"]:
-            if user:
-                # Update the user data in MongoDB
-                result = user_collection.update_one({"_id": user["_id"]}, {"$set": new_data})
-                print(result)
-            # Check if the user is found and updated
-            else:
+
+        if user and user['role'] in ['org-admin', 'admin']:
+            # Handle photo uploads
+            # Update the user data in MongoDB
+            result = user_collection.update_one({"_id": user["_id"]}, {"$set": new_data})
+
+            if result.matched_count == 0:
                 raise HTTPException(status_code=404, detail="User not found")
+            if result.modified_count == 0:
+                return {"message": "No changes made to the user data"}
 
             return {"message": "User updated successfully"}
 
         else:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail='No permission to Edit User')
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='No permission to edit user')
     else:
-        raise HTTPException(status_code=401, detail="Does not have Permission to Edit")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 
 
 @user_router.post("/request-reset-password/")
@@ -177,7 +234,7 @@ async def reset_password(new_password, otp: str = Depends(verify_otp)):
             new_password = user_utils.hash_password(new_password)
             print(new_password)
             result = user_collection.update_one({"_id": user["_id"]},
-                                                {"$set": {"password": new_password, "updated_at": datetime.utcnow()}})
+                                                {"$set": {"password": new_password, "updated_at": datetime.now()}})
             if result:
                 return {"message": "Password reset successfully"}
             else:
@@ -189,25 +246,85 @@ async def reset_password(new_password, otp: str = Depends(verify_otp)):
         raise HTTPException(status_code=401, detail=token)
 
 
-@user_router.get("/user/info", response_model=UserReponse)
-async def update_user(token: str = Depends(val_token)):
-    if token[0] is True:
+@user_router.get("/user/info", response_model=UserResponse)
+async def get_user_info(token: str = Depends(val_token)):
+    if token[0]:
         payload = token[1]
         user = user_collection.find_one({'email': payload["email"]})
-        members_count = 0
-        business_count = 0
+        print(user)
         if user:
-            if 'members' in user:
-                members_count = len(user['members'])
-            user['members_count'] = members_count
-            user['created_at'] = str(user['created_at'])
-            return json.loads(json_util.dumps(user))
-        # Check if the user is found and updated
+            try:
+                members_count = len(user.get('members', []))
+                user['members_count'] = members_count
+                user['created_at'] = str(user['created_at'])
+                user['photo'] = user.get('photo', [])
+            except:
+                raise HTTPException(status_code=400, detail="error retrieving data")
         else:
             raise HTTPException(status_code=404, detail="User not found")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return json.loads(json_util.dumps(user))
 
+
+@user_router.get('/login/activity', response_model=List[LoginActivitySchema])
+async def get_login_activity(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] == 'customer':
+            details = customers_collection.find_one({'email': payload['email']})
+        elif payload['role'] == 'partner':
+            details = member_collections.find_one({'email': payload['email']})
+        elif payload['role'] in ['org-admin', 'admin']:
+            details = user_collection.find_one({'email': payload['email']})
+        activities = list(
+            login_activity_collection.find(
+                {'email': details['email'], 'role': payload['role'], 'user_id': str(details['_id'])}).sort(
+                'timestamp', -1))
+
+        if not activities:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No login activities found')
+
+        return activities
     else:
         raise HTTPException(status_code=401, detail=token)
+
+
+@user_router.post("/upload/photos")
+async def upload_photos(
+        photos: List[UploadFile] = File([]),
+        token: tuple = Depends(val_token)
+):
+    global result
+    if token[0]:
+        payload = token[1]
+        files_data = []
+        if photos:
+            for file in photos:
+                file_data = await file.read()
+                file_id = database.store_file(file_data, file.filename)  # Ensure db.store_file is implemented
+                files_data.append({'file_id': str(file_id), 'file_name': file.filename})
+
+        if payload['role'] == 'customer':
+            details = customers_collection.find_one({'email': payload['email']})
+            result = customers_collection.update_one({"_id": ObjectId(details["_id"])}, {"$set": {'photo': files_data}})
+        elif payload['role'] == 'partner':
+            details = member_collections.find_one({'email': payload['email']})
+            result = member_collections.update_one({"_id": ObjectId(details["_id"])}, {"$set": {'photo': files_data}})
+        elif payload['role'] in ['org-admin', 'admin']:
+            details = user_collection.find_one({'email': payload['email']})
+            result = user_collection.update_one({"_id": ObjectId(details["_id"])}, {"$set": {'photo': files_data}})
+            payload['role'] = 'admin'
+
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        if result.modified_count == 0:
+            return {"message": "No changes made to the user data"}
+
+        return {"message": "User updated successfully"}
+
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 
 
 @user_router.post("/user/logout")

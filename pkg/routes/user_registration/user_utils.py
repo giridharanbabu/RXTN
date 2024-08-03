@@ -7,7 +7,7 @@ from config.config import settings
 from pkg.database.database import database
 
 user_collection = database.get_collection('users')
-
+login_activity_collection = database.get_collection('login_activity')
 pwd_context = CryptContext(["sha256_crypt"])
 # pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
@@ -34,9 +34,9 @@ def verify_password(password: str, hashed_password: str):
 
 def create_access_token(subject: Union[str, Any], name: str, role: str, expires_delta: timedelta = None) -> str:
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode = {
         "exp": expire,
@@ -51,7 +51,7 @@ def create_access_token(subject: Union[str, Any], name: str, role: str, expires_
 def generate_otp():
     import random
     otp = ''.join(random.choices('0123456789', k=6))
-    expiration_time = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expiration_time = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     reset_data = {
         "reset_otp": otp,
         "reset_otp_exp": expiration_time
@@ -61,9 +61,9 @@ def generate_otp():
 
 def create_refresh_token(subject: Union[str, Any], name: str, role: str, expires_delta: int = None) -> str:
     if expires_delta is not None:
-        expires_delta = datetime.utcnow() + expires_delta
+        expires_delta = datetime.now() + expires_delta
     else:
-        expires_delta = datetime.utcnow() + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
+        expires_delta = datetime.now() + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
 
     to_encode = {"exp": expires_delta, "email": str(subject), "name": name, "role": role}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET, settings.ALGORITHM)
@@ -81,3 +81,30 @@ def validate_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Token has expired")
     except JWTError as e:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def log_user_activity(email: str, role: str, user_id: str):
+    login_activity_collection.insert_one({
+        'email': email,
+        'role': role,
+        'user_id': user_id,
+        'created_at': datetime.now()
+    })
+
+
+def cleanup_old_logins():
+    seven_days_ago = datetime.now() - timedelta(days=7)
+    login_activity_collection.delete_many({'created_at': {'$lt': seven_days_ago}})
+
+
+def keep_last_three_logins(email: str, role: str, user_id: str):
+    query = {'email': email}
+    if user_id:
+        query[role] = user_id
+    seven_days_ago = datetime.now() - timedelta( days=7)
+
+    cursor = login_activity_collection.find({'email': email, 'role':role, 'user_id': user_id, 'created_at': {'$lt': seven_days_ago}}).sort('created_at', -1).skip(3)
+    ids_to_delete = [doc['_id'] for doc in cursor]
+    if ids_to_delete:
+        login_activity_collection.delete_many({'_id': {'$in': ids_to_delete}})
+

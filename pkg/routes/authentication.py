@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import List
 
 from passlib.context import CryptContext
 import jwt
@@ -52,7 +53,7 @@ async def authenticate_user(email, password, register):
 
 async def verify_otp(otp: str):
     register = database.get_collection('users')
-    expires_delta = datetime.utcnow()
+    expires_delta = datetime.now()
     result = register.find_one_and_update(
         filter={
             "reset_otp_exp": {"$gt": expires_delta},
@@ -78,9 +79,9 @@ async def token_generator(username: str, password: str, register, expires_delta=
         )
 
     if expires_delta is not None:
-        expires_delta = datetime.utcnow() + expires_delta
+        expires_delta = datetime.now() + expires_delta
     else:
-        expires_delta = datetime.utcnow() + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
+        expires_delta = datetime.now() + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
     token_data = {
         "exp": expires_delta, 'name': user['name'], 'email': user['email'], 'role': user['role']
     }
@@ -111,8 +112,8 @@ def val_token(token: str = Header(...)):
             raise ValueError("Invalid token: Missing required claims")
 
         # Step 4: Check token expiration
-        current_time = datetime.utcnow()
-        if current_time > datetime.utcfromtimestamp(expiration_time):
+        current_time = datetime.now()
+        if current_time > datetime.fromtimestamp(expiration_time):
             raise ValueError("Token has expired")
 
         # Token is valid
@@ -153,7 +154,7 @@ async def verify_me(email: str, otp: str):
     # print(hotp.at(0))
 
     result = register.find_one_and_update({"email": email, "verification_code": otp}, {
-        "$set": {"verification_code": None, "verified": True, "updated_at": datetime.utcnow()}}, new=True)
+        "$set": {"verification_code": None, "verified": True, "updated_at": datetime.now()}}, new=True)
     access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
     if not result:
         raise HTTPException(
@@ -173,7 +174,7 @@ async def verify_partner(token):
     register = database.get_collection('partners')
 
     result = register.find_one_and_update({"email": payload['email'], "verification_code": payload['otp']}, {
-        "$set": {"verification_code": None, "verified": True, "updated_at": datetime.utcnow()}}, new=True)
+        "$set": {"verification_code": None, "verified": True, "updated_at": datetime.now()}}, new=True)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail='Invalid verification code or account already verified')
@@ -189,11 +190,12 @@ async def verify_partner(token):
 def generate_otp_token(user, otp, expires_delta=None):
     from datetime import datetime, timedelta
     if expires_delta is not None:
-        expires_delta = datetime.utcnow() + expires_delta
+        expires_delta = datetime.now() + expires_delta
     else:
-        expires_delta = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_delta = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token_data = {
         "exp": expires_delta, 'name': user['name'], 'email': user['email'], 'role': user['role'], 'otp': otp
     }
     token = jwt.encode(token_data, settings.SECRET)
     return token
+

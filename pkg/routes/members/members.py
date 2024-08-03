@@ -1,5 +1,7 @@
+import json
 import uuid
 
+from bson import json_util
 from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends, Response
 from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPasswordRequest
 from pkg.routes.members.members_models import *
@@ -14,6 +16,8 @@ from random import randbytes
 import hashlib, base64
 from config.config import settings
 from pkg.routes.user_registration.user_utils import generate_otp
+from pkg.routes.user_registration.user_utils import generate_otp, log_user_activity, cleanup_old_logins, \
+    keep_last_three_logins
 
 members_router = APIRouter()
 members_collection = database.get_collection('partners')
@@ -46,9 +50,19 @@ async def create_user(payload: CreateMemberSchema):
         del payload.passwordConfirm
         payload.verified = False
         payload.email = payload.email.lower()
-        payload.created_at = datetime.utcnow()
+        payload.created_at = datetime.now()
         payload.updated_at = payload.created_at
-        result = members_collection.insert_one(payload.dict())
+        payload_dict = payload.dict()
+
+        if payload.photo:
+            payload_dict['files'] = []
+            for file in payload.photo:
+                file_data = await file.read()
+                file_id = database.store_file(file_data, file.filename)
+                payload_dict['files'].append({'file_id': str(file_id), 'file_name': file.filename})
+        else:
+            payload_dict['files'] = []
+        result = members_collection.insert_one(payload_dict)
         new_user = members_collection.find_one({'_id': result.inserted_id})
         if new_user:
             try:
@@ -62,9 +76,9 @@ async def create_user(payload: CreateMemberSchema):
                 hotp_v = pyotp.HOTP(verification_code)
                 members_collection.find_one_and_update({"_id": result.inserted_id}, {
                     "$set": {"verification_code": hotp_v.at(0),
-                             "Verification_expireAt": datetime.utcnow() + timedelta(
+                             "Verification_expireAt": datetime.now() + timedelta(
                                  minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
-                             "updated_at": datetime.utcnow(), "status": "pending"}})
+                             "updated_at": datetime.now(), "status": "pending"}})
                 payload_token = payload.dict()
                 token = generate_otp_token(payload_token, hotp_v.at(0))
                 token = str(token)
@@ -72,7 +86,7 @@ async def create_user(payload: CreateMemberSchema):
                 await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
             except Exception as error:
                 members_collection.find_one_and_update({"_id": result.inserted_id}, {
-                    "$set": {"verification_code": None, "updated_at": datetime.utcnow()}, "status": "pending"})
+                    "$set": {"verification_code": None, "updated_at": datetime.now()}, "status": "pending"})
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                                     detail='There was an error sending email')
             return {'status': 'success', 'message': 'Verification token successfully sent to your email'}
@@ -182,12 +196,14 @@ async def verification_request(token: str = Depends(val_token)):
                 users_detail = user_collection.find_one({"members.member_id": ObjectId(member['_id'])})
                 if users_detail:
                     body = {'name': member['name']}
-                    await Email('Verification Request for Code Regeneration', users_detail['email'], 'verification_request',
+                    await Email('Verification Request for Code Regeneration', users_detail['email'],
+                                'verification_request',
                                 body).send_email()
                     return {'status': 'success', 'message': 'Request sent successfully'}
                 else:
                     body = {'name': member['name']}
-                    await Email('Verification Request for Code Regeneration', "giri1208srinivas@gmail.com", 'verification_request',
+                    await Email('Verification Request for Code Regeneration', "giri1208srinivas@gmail.com",
+                                'verification_request',
                                 body).send_email()
                     return {'status': 'success', 'message': 'Request sent successfully'}
 
@@ -201,27 +217,25 @@ async def verification_request(token: str = Depends(val_token)):
                             detail='Invalid token or user not authorized')
 
 
-
-
 @members_router.get("/partner/info", response_model=MembersResponse)
-async def get_partner_info(token: str = Depends(val_token)):
-    if token[0] is True:
+async def get_partner_info(token: tuple = Depends(val_token)):
+    print(token)
+    if token[0]:
         payload = token[1]
         if payload['role'] == 'partner':
-            partner = members_collection.find_one({'email': payload["email"]})
-            if partner:
-                partner['id'] = str(partner['_id'])
-
-                return partner
-            # Check if the user is found and updated
-            else:
-                raise HTTPException(status_code=404, detail="partner not found")
+            try:
+                partner = members_collection.find_one({'email': payload["email"]})
+                if partner:
+                    partner['id'] = str(partner['_id'])
+                    return partner
+                else:
+                    raise HTTPException(status_code=404, detail="Partner not found")
+            except Exception as error:
+                raise HTTPException(status_code=400, detail="Error retrieving data")
         else:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail='Invalid token or user not authorized')
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token or user not authorized')
     else:
         raise HTTPException(status_code=401, detail='Invalid token')
-
 
 #
 # @members_router.post("/edit/request")
@@ -254,7 +268,7 @@ async def get_partner_info(token: str = Depends(val_token)):
 #             details = member.dict()
 #             # members_collection = database.get_collection('members')
 #             member = members_collection.find_one({'email': details["email"]})
-#             details['updated_time'] = datetime.utcnow()
+#             details['updated_time'] = datetime.now()
 #             if member:
 #                 # if member['role'] == 'admin' or member['role'] == 'user':
 #                 result = members_collection.update_one({"_id": member["_id"]}, {"$set": details})
@@ -274,7 +288,7 @@ async def get_partner_info(token: str = Depends(val_token)):
 
 
 @members_router.post("/edit/partner")
-async def update_partner(member: Members, token: str = Depends(val_token)):
+async def update_partner(member: EditMembers, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         edit_members = member.dict(exclude_none=True)
@@ -282,8 +296,15 @@ async def update_partner(member: Members, token: str = Depends(val_token)):
             member = members_collection.find_one({'email': edit_members["email"]})
             if member:
 
-                edit_members['updated_at'] = datetime.utcnow()
-                edit_members.pop('role')
+                edit_members['updated_at'] = datetime.now()
+                edit_members.pop('role', None)
+                if 'partner_user_id' in edit_members:
+                    user_id = members_collection.find_one({'partner_user_id': edit_members["partner_user_id"]})
+                    if user_id:
+                        raise HTTPException(status_code=400,
+                                            detail=f"Customer {edit_members['partner_user_id']} -already exists "
+                                                   f"please try different name")
+
                 result = members_collection.update_one({"_id": member["_id"]}, {"$set": edit_members})
                 if result:
                     return {"message": "Partner updated successfully"}
@@ -299,7 +320,7 @@ async def update_partner(member: Members, token: str = Depends(val_token)):
             #     if member:
             #         edit_members['pending_changes'] = {
             #             **edit_members,
-            #             'updated_at': datetime.utcnow()
+            #             'updated_at': datetime.now()
             #         }
             #         result = members_collection.update_one(
             #             {'_id': member['_id']},
@@ -512,13 +533,18 @@ async def login(payload: LoginMemberSchema, response: Response):
 
             # Store refresh and access tokens in cookie
             response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
-                                ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
+                                ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
             response.set_cookie('refresh_token', refresh_token,
                                 REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True,
                                 'none')
             response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
                                 ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, False, 'none')
+            # Log user activity
+            log_user_activity(user['email'], db_user['role'], str(db_user['_id']))
 
+            # Clean up old logins and keep the last 3 logins
+            cleanup_old_logins()
+            keep_last_three_logins(user['email'], db_user['role'], str(db_user['_id']))
             # Send both access
             return {'status': 'success', 'user': user['name'], 'access_token': access_token}
         else:
