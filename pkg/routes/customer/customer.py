@@ -20,6 +20,8 @@ customers_collection = database.get_collection('customers')
 user_collection = database.get_collection('users')
 member_collections = database.get_collection('partners')
 login_activity_collection = database.get_collection('login_activity')
+ticket_collection = database.get_collection('tickets')
+chat_messages_collections = database.get_collection('chat_messages')
 
 
 @customer_router.post("/customer/cp/register/")
@@ -149,8 +151,8 @@ async def login(payload: LoginCustomerSchema, response: Response):
         refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'customer')
 
         # Store refresh and access tokens in cookie
-        response.set_cookie('rxtn_customer_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
-                            ACCESS_TOKEN_EXPIRES_IN, '/', None, True, True, 'none')
+        response.set_cookie('rxtn_customer_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,
+                            ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
         response.set_cookie('refresh_token', refresh_token,
                             REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
         response.set_cookie('logged_in', 'True', ACCESS_TOKEN_EXPIRES_IN * 60,
@@ -184,6 +186,54 @@ async def user_login(request: Request):
                                 detail='Invalid token or user not authorized')
 
 
+@customer_router.get("/customer/info/{cus_id}")
+async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)):
+
+    if token[0] is not True:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    payload = token[1]
+    user = None
+
+    if payload['role'] in ['org-admin', 'admin']:
+        user = user_collection.find_one({'email': payload['email']})
+        customer_data = customers_collection.find_one({"_id": ObjectId(cus_id)}, {'_id': False})
+        if not customer_data:
+            raise HTTPException(status_code=404, detail="User not found")
+    elif payload['role'] == 'partner':
+        user = member_collections.find_one({'email': payload['email']})
+        print(user)
+        customer_data = customers_collection.find_one({"_id": ObjectId(cus_id),
+                                                       "partner_id": {"$in": [str(user['_id'])]}},
+                                                      {'_id': False})
+        if not customer_data:
+            raise HTTPException(status_code=404, detail="Customer not found for partner")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token/Not Authorized")
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User does not have access to view Customer")
+    if customer_data['partner_id']:
+        partner_information = member_collections.find_one({"_id": ObjectId(customer_data['partner_id'][0])}, {'_id': False})
+    else:
+        partner_information =[]
+
+    tickets = []
+    if 'tickets' in customer_data:
+        for ticket_id in customer_data['tickets']:
+            ticket_information = ticket_collection.find_one({"_id": ObjectId(ticket_id)}, {'_id': False})
+            if ticket_information:
+                tickets.append(ticket_information)
+
+    customer = {
+        'info': customer_data,
+        'partners': partner_information,
+        'tickets': tickets
+    }
+
+    return customer
+
+
 # List partners route
 @customer_router.get("/customers")
 async def list_customers(token: str = Depends(val_token)):
@@ -202,6 +252,7 @@ async def list_customers(token: str = Depends(val_token)):
             customers = []
 
             for customer in customers_cursor:
+                print(customer)
                 # Convert ObjectId to string if necessary
                 customer["_id"] = str(customer["_id"])
                 if payload['role'] in ['org-admin', "admin"]:
@@ -219,6 +270,8 @@ async def list_customers(token: str = Depends(val_token)):
                             customer['partner'] = member.dict()
                     customer.pop('password', None)
                     customer.pop('old_passwords', None)
+                    customer['tickets'] = customer.get('tickets', [])
+                    customer['ticket_count'] = len(customer['tickets'])
                     customers.append(customer)
                 elif payload['role'] == 'partner':
 
@@ -241,6 +294,7 @@ async def list_customers(token: str = Depends(val_token)):
                             customer['partner'] = member.dict()
                             customer.pop('password', None)
                             customer.pop('old_passwords', None)
+                            customer['ticket_count'] = len(customer['tickets'])
                             customers.append(customer)
 
             return customers
@@ -252,7 +306,8 @@ async def list_customers(token: str = Depends(val_token)):
 
 
 @customer_router.get("/customer/info", response_model=CustomerResponse)
-async def update_user(token: str = Depends(val_token)):
+async def get_user(token: str = Depends(val_token)):
+    print(token)
     if token[0] is True:
         payload = token[1]
         if payload['role'] == 'customer':
@@ -270,7 +325,7 @@ async def update_user(token: str = Depends(val_token)):
                             role=partner_information.get('role', ""),
                             phone=partner_information.get('phone', None),
                             created_at=str(partner_information.get('created_at', None)),
-                            photo= partner_information.get('files', [])
+                            photo=partner_information.get('files', [])
                         )
                         customer['partner'] = member.dict()
                 customer['created_at'] = str(customer['created_at'])
@@ -479,5 +534,3 @@ def logout(response: Response):
     )
 
     return {"message": "Logged out successfully"}
-
-

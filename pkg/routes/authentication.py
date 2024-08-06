@@ -92,20 +92,17 @@ async def token_generator(username: str, password: str, register, expires_delta=
 # Define a function to validate the token
 def val_token(token: str = Header(...)):
     # Extract the token from the header
-
     try:
         scheme, token = token.split(' ')
         if scheme.lower() != "bearer" or scheme is None:
             raise HTTPException(status_code=401, detail="Invalid token scheme. Must be Bearer")
         # Step 1: Decode the token and verify its integrity
         payload = jwt.decode(token, settings.SECRET, algorithms=[settings.ALGORITHM])
-        print(payload)
         # Step 2: Extract required claims
         issuer = payload.get("role")
         subject = payload.get("email")
         expiration_time = payload.get("exp")
         audience = payload.get("name")
-        print(audience)
 
         # Step 3: Validate required claims
         if not issuer or not subject or not expiration_time or not audience:
@@ -114,8 +111,8 @@ def val_token(token: str = Header(...)):
         # Step 4: Check token expiration
         current_time = datetime.now()
         if current_time > datetime.fromtimestamp(expiration_time):
-            raise ValueError("Token has expired")
 
+            raise ValueError("Token has expired")
         # Token is valid
         return True, payload
 

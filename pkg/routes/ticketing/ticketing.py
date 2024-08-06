@@ -74,7 +74,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         ticket_info = {"ticket_id": ticket_doc["_id"], "status": ticket_doc["status"],
                        "created_at": ticket_doc["created_at"], "created_by": ticket_doc['customer']}
         update_customer = customers_collection.update_one({'_id': ObjectId(customer_details['_id'])},
-                                                          {'$set': {'tickets': ticket_info}})
+                                                           {'$push': {"tickets":ticket_doc["_id"]}})
 
         return Ticket(**ticket_doc)
     else:

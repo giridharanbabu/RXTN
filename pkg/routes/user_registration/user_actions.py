@@ -3,12 +3,15 @@ import hashlib
 import json
 from datetime import datetime, timedelta
 from random import randbytes
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 import pyotp
 from bson import json_util, ObjectId
 from fastapi import HTTPException, status, APIRouter, Request, Depends, Response, File, UploadFile, Body
 from jose import jwt
+
+from pkg.routes.user_registration.search_model import SearchResultModel, UserModel, MemberModel, CustomerModel, \
+    TicketModel
 from pkg.routes.user_registration.user_models import CreateUserSchema, LoginUserSchema, PasswordResetRequest, \
     UserResponse, LoginActivitySchema
 from pkg.database.database import database
@@ -26,6 +29,7 @@ customers_collection = database.get_collection('customers')
 member_collections = database.get_collection('partners')
 login_activity_collection = database.get_collection('login_activity')
 user_collection.create_index("expireAt", expireAfterSeconds=10)
+ticket_collection = database.get_collection('tickets')
 
 
 @user_router.post("/user/register")
@@ -322,6 +326,50 @@ async def upload_photos(
             return {"message": "No changes made to the user data"}
 
         return {"message": "User updated successfully"}
+
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+
+def search_collection(collection, query: str, fields: List[str]):
+    search_query = {"$or": [{field: {"$regex": query.lower(), "$options": "i"}} for field in fields]}
+    results = collection.find(search_query)
+    print(results)
+    return [{"id": str(item["_id"]), **item} for item in results]
+
+
+@user_router.get('/search')
+async def common_search(query: str, token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] in ['org-admin', 'admin']:
+            # Define which fields to search in each collection
+            user_fields = ["email", "name"]
+            member_fields = ["partner_user_id", "email", "name", "phone"]
+            customer_fields = ["name", "email", "phone"]
+            ticket_fields = ["title","description"]
+
+            # Search in each collection
+            user_results = search_collection(user_collection, query, user_fields)
+            member_results = search_collection(member_collections, query, member_fields)
+            customer_results = search_collection(customers_collection, query, customer_fields)
+            ticket_results = search_collection(ticket_collection, query, ticket_fields)
+            # Convert the results to the appropriate models
+            users = [UserModel(**user) for user in user_results]
+            members = [MemberModel(**member) for member in member_results]
+            customers = [CustomerModel(**customer) for customer in customer_results]
+            tickets = [TicketModel(**ticket) for ticket in ticket_results]
+
+            # Combine all results into the response model
+            combined_results = SearchResultModel(
+                users=users,
+                members=members,
+                customers=customers,
+                tickets=tickets
+            )
+            return combined_results
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not Authorized")
 
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")

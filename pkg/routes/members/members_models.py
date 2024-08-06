@@ -107,7 +107,8 @@ class CreateMemberSchema(MemberBaseSchema):
 
 
 class LoginMemberSchema(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
+    username: Optional[str] = None
     password: constr(min_length=8)
 
 

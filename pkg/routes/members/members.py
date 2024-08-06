@@ -36,63 +36,64 @@ async def create_user(payload: CreateMemberSchema):
         else:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                                 detail='Account already exist')
-    else:
-        while True:
-            partner_user_id = str(uuid.uuid4())
-            if not members_collection.find_one({'partner_user_id': partner_user_id}):
-                payload.partner_user_id = partner_user_id
-                break
-        # Compare password and passwordConfirm
-        if payload.password != payload.passwordConfirm:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Passwords do not match')
-        #  Hash the password
-        payload.password = hash_password(payload.password)
-        del payload.passwordConfirm
-        payload.verified = False
-        payload.email = payload.email.lower()
-        payload.created_at = datetime.now()
-        payload.updated_at = payload.created_at
-        payload_dict = payload.dict()
+    # else:
+    #     while True:
+    #         partner_user_id = str(uuid.uuid4())
+    #         if not members_collection.find_one({'partner_user_id': partner_user_id}):
+    #             payload.partner_user_id = partner_user_id
+    #             break
+    payload.partner_user_id = payload.partner_user_id.lower()
+    # Compare password and passwordConfirm
+    if payload.password != payload.passwordConfirm:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Passwords do not match')
+    #  Hash the password
+    payload.password = hash_password(payload.password)
+    del payload.passwordConfirm
+    payload.verified = False
+    payload.email = payload.email.lower()
+    payload.created_at = datetime.now()
+    payload.updated_at = payload.created_at
+    payload_dict = payload.dict()
 
-        if payload.photo:
-            payload_dict['files'] = []
-            for file in payload.photo:
-                file_data = await file.read()
-                file_id = database.store_file(file_data, file.filename)
-                payload_dict['files'].append({'file_id': str(file_id), 'file_name': file.filename})
-        else:
-            payload_dict['files'] = []
-        result = members_collection.insert_one(payload_dict)
-        new_user = members_collection.find_one({'_id': result.inserted_id})
-        if new_user:
-            try:
-                token = randbytes(10)
-                hashedCode = hashlib.sha256()
-                hashedCode.update(token)
-                verification_code = hashedCode.hexdigest()
-                import pyotp
-                secret = base64.b32encode(bytes(token.hex(), 'utf-8'))
-                verification_code = base64.b32encode(bytes(verification_code, 'utf-8'))
-                hotp_v = pyotp.HOTP(verification_code)
-                members_collection.find_one_and_update({"_id": result.inserted_id}, {
-                    "$set": {"verification_code": hotp_v.at(0),
-                             "Verification_expireAt": datetime.now() + timedelta(
-                                 minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
-                             "updated_at": datetime.now(), "status": "pending"}})
-                payload_token = payload.dict()
-                token = generate_otp_token(payload_token, hotp_v.at(0))
-                token = str(token)
-                message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
-                await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
-            except Exception as error:
-                members_collection.find_one_and_update({"_id": result.inserted_id}, {
-                    "$set": {"verification_code": None, "updated_at": datetime.now()}, "status": "pending"})
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                                    detail='There was an error sending email')
-            return {'status': 'success', 'message': 'Verification token successfully sent to your email'}
-        else:
+    if payload.photo:
+        payload_dict['files'] = []
+        for file in payload.photo:
+            file_data = await file.read()
+            file_id = database.store_file(file_data, file.filename)
+            payload_dict['files'].append({'file_id': str(file_id), 'file_name': file.filename})
+    else:
+        payload_dict['files'] = []
+    result = members_collection.insert_one(payload_dict)
+    new_user = members_collection.find_one({'_id': result.inserted_id})
+    if new_user:
+        try:
+            token = randbytes(10)
+            hashedCode = hashlib.sha256()
+            hashedCode.update(token)
+            verification_code = hashedCode.hexdigest()
+            import pyotp
+            secret = base64.b32encode(bytes(token.hex(), 'utf-8'))
+            verification_code = base64.b32encode(bytes(verification_code, 'utf-8'))
+            hotp_v = pyotp.HOTP(verification_code)
+            members_collection.find_one_and_update({"_id": result.inserted_id}, {
+                "$set": {"verification_code": hotp_v.at(0),
+                         "Verification_expireAt": datetime.now() + timedelta(
+                             minutes=settings.EMAIL_EXPIRATION_TIME_MIN),
+                         "updated_at": datetime.now(), "status": "pending"}})
+            payload_token = payload.dict()
+            token = generate_otp_token(payload_token, hotp_v.at(0))
+            token = str(token)
+            message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
+            await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
+        except Exception as error:
+            members_collection.find_one_and_update({"_id": result.inserted_id}, {
+                "$set": {"verification_code": None, "updated_at": datetime.now()}, "status": "pending"})
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                                detail='There was an error registering user')
+                                detail='There was an error sending email')
+        return {'status': 'success', 'message': 'Verification token successfully sent to your email'}
+    else:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail='There was an error registering user')
 
 
 @members_router.post("/partner/verification/approval")
@@ -145,13 +146,14 @@ async def create_member(member: Members, token: str = Depends(val_token)):
             details['password'] = hashed_temp_password
             details['verified'] = True
             details['status'] = "approved"
-            while True:
-                partner_user_id = str(uuid.uuid4())
-                test = members_collection.find_one({'partner_user_id': partner_user_id})
-                print(test)
-                if not members_collection.find_one({'partner_user_id': partner_user_id}):
-                    details['partner_user_id'] = partner_user_id
-                    break
+            details['partner_user_id'] = details['partner_user_id'].lower()
+            # while True:
+            #     partner_user_id = str(uuid.uuid4())
+            #     test = members_collection.find_one({'partner_user_id': partner_user_id})
+            #     print(test)
+            #     if not members_collection.find_one({'partner_user_id': partner_user_id}):
+            #         details['partner_user_id'] = partner_user_id
+            #         break
             # Iterate over the results
             document_list = []
             for document in cursor:
@@ -285,6 +287,13 @@ async def get_partner_info(token: tuple = Depends(val_token)):
 #                                 detail='No permission to Edit User')
 #     else:
 #         raise HTTPException(status_code=401, detail=token)
+@members_router.get('/member/{user_id}')
+async def check_user_name(user_id):
+    user_id = members_collection.find_one({'partner_user_id': user_id.lower()})
+    if user_id:
+        return False
+    else:
+        return True
 
 
 @members_router.post("/edit/partner")
@@ -299,7 +308,7 @@ async def update_partner(member: EditMembers, token: str = Depends(val_token)):
                 edit_members['updated_at'] = datetime.now()
                 edit_members.pop('role', None)
                 if 'partner_user_id' in edit_members:
-                    user_id = members_collection.find_one({'partner_user_id': edit_members["partner_user_id"]})
+                    user_id = members_collection.find_one({'partner_user_id': edit_members["partner_user_id"].lower()})
                     if user_id:
                         raise HTTPException(status_code=400,
                                             detail=f"Customer {edit_members['partner_user_id']} -already exists "
@@ -506,12 +515,21 @@ async def verify_otp(request: VerifyOtpRequest):
 @members_router.post('/member/login')
 async def login(payload: LoginMemberSchema, response: Response):
     # Check if the user exist
+    # Check if the user exists
+    query = {}
+    if payload.email:
+        query['email'] = payload.email
+    if payload.username:
+        query['partner_user_id'] = payload.username.lower()
 
-    db_user = members_collection.find_one({'email': payload.email.lower()})
+    db_user = members_collection.find_one(query)
+    if not db_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User not registered')
+    # db_user = members_collection.find_one({'email': payload.email.lower()})
     if db_user['role'] == 'partner':
-        if not db_user:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                detail='User does not Registered')
+        # if not db_user:
+        #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+        #                         detail='User does not Registered')
         if db_user['status'] == 'approved':
             user = customerEntity(db_user)
             print(user)
@@ -532,7 +550,7 @@ async def login(payload: LoginMemberSchema, response: Response):
             refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'partner')
 
             # Store refresh and access tokens in cookie
-            response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN,
+            response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,
                                 ACCESS_TOKEN_EXPIRES_IN * 60, '/', None, True, True, 'none')
             response.set_cookie('refresh_token', refresh_token,
                                 REFRESH_TOKEN_EXPIRES_IN * 60, REFRESH_TOKEN_EXPIRES_IN * 60, '/', None, True, True,
