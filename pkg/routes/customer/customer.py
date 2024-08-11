@@ -294,6 +294,7 @@ async def list_customers(token: str = Depends(val_token)):
                             customer['partner'] = member.dict()
                             customer.pop('password', None)
                             customer.pop('old_passwords', None)
+                            customer['tickets'] = customer.get('tickets', [])
                             customer['ticket_count'] = len(customer['tickets'])
                             customers.append(customer)
 
