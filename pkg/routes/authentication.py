@@ -83,7 +83,7 @@ async def token_generator(username: str, password: str, register, expires_delta=
     else:
         expires_delta = datetime.now() + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
     token_data = {
-        "exp": expires_delta, 'name': user['name'], 'email': user['email'], 'role': user['role']
+        "exp": expires_delta, 'name': user['name'], 'email': user['email'], 'role': user['role'], id: str(user['id'])
     }
     token = jwt.encode(token_data, settings.SECRET)
     return token
@@ -152,7 +152,7 @@ async def verify_me(email: str, otp: str):
 
     result = register.find_one_and_update({"email": email, "verification_code": otp}, {
         "$set": {"verification_code": None, "verified": True, "updated_at": datetime.now()}}, new=True)
-    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
+    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'], result['id'])
     if not result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail='Invalid verification code or account already verified')
@@ -175,7 +175,7 @@ async def verify_partner(token):
     if not result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail='Invalid verification code or account already verified')
-    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'])
+    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'], result['id'])
 
     return {
         "status": "success",

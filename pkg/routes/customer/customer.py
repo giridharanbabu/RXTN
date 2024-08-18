@@ -146,9 +146,9 @@ async def login(payload: LoginCustomerSchema, response: Response):
                                 detail='Incorrect Email or Password')
 
         # Create access token
-        access_token = user_utils.create_access_token(user['email'], user['name'], 'customer')
+        access_token = user_utils.create_access_token(user['email'], user['name'], 'customer', str(user['id']))
         # Create refresh token
-        refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'customer')
+        refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'customer', str(user['id']))
 
         # Store refresh and access tokens in cookie
         response.set_cookie('rxtn_customer_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,
@@ -198,11 +198,11 @@ async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)
     if payload['role'] in ['org-admin', 'admin']:
         user = user_collection.find_one({'email': payload['email']})
         customer_data = customers_collection.find_one({"_id": ObjectId(cus_id)}, {'_id': False})
+
         if not customer_data:
             raise HTTPException(status_code=404, detail="User not found")
     elif payload['role'] == 'partner':
         user = member_collections.find_one({'email': payload['email']})
-        print(user)
         customer_data = customers_collection.find_one({"_id": ObjectId(cus_id),
                                                        "partner_id": {"$in": [str(user['_id'])]}},
                                                       {'_id': False})
@@ -217,12 +217,14 @@ async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)
         partner_information = member_collections.find_one({"_id": ObjectId(customer_data['partner_id'][0])}, {'_id': False})
     else:
         partner_information =[]
-
+    print(customer_data)
     tickets = []
     if 'tickets' in customer_data:
         for ticket_id in customer_data['tickets']:
-            ticket_information = ticket_collection.find_one({"_id": ObjectId(ticket_id)}, {'_id': False})
+            ticket_information = ticket_collection.find_one({"_id": ObjectId(ticket_id)})
+            print(ticket_information)
             if ticket_information:
+                ticket_information['_id'] = str(ticket_information['_id'])
                 tickets.append(ticket_information)
 
     customer = {
@@ -252,12 +254,12 @@ async def list_customers(token: str = Depends(val_token)):
             customers = []
 
             for customer in customers_cursor:
-                print(customer)
+
                 # Convert ObjectId to string if necessary
                 customer["_id"] = str(customer["_id"])
                 if payload['role'] in ['org-admin', "admin"]:
                     if customer['partner_id']:
-                        partner_information = member_collections.find_one({"_id": ObjectId(customer['partner_id'][0])})
+                        partner_information = member_collections.find_one({"partner_user_id": customer['partner_id'][0]})
                         if partner_information:
                             member = PartnerResponse(
                                 id=str(customer['partner_id'][0]),
@@ -275,28 +277,29 @@ async def list_customers(token: str = Depends(val_token)):
                     customers.append(customer)
                 elif payload['role'] == 'partner':
 
-                    print("-------", customer['partner_id'])
+                    print("-------", customer)
                     if customer['partner_id']:
-                        partner_information = member_collections.find_one({"_id": ObjectId(customer['partner_id'][0])})
-                        print(str(partner_information['_id']))
-                        print(str(user['_id']))
-                        if str(partner_information['_id']) == str(user['_id']):
-                            print(str(partner_information['_id']))
-                            print(str(user['_id']))
-                            member = PartnerResponse(
-                                id=str(customer['partner_id'][0]),
-                                name=partner_information['name'],
-                                email=partner_information['email'],
-                                role=partner_information.get('role', ""),
-                                phone=partner_information.get('partner_user_id', None),
-                                created_at=str(partner_information.get('created_at', None))
-                            )
-                            customer['partner'] = member.dict()
-                            customer.pop('password', None)
-                            customer.pop('old_passwords', None)
-                            customer['tickets'] = customer.get('tickets', [])
-                            customer['ticket_count'] = len(customer['tickets'])
-                            customers.append(customer)
+                        partner_information = member_collections.find_one({"partner_user_id": customer['partner_id'][0]})
+                        if partner_information:
+                            if str(partner_information['_id']) == str(user['_id']):
+                                print(str(partner_information['_id']))
+                                print(str(user['_id']))
+                                member = PartnerResponse(
+                                    id=str(customer['partner_id'][0]),
+                                    name=partner_information['name'],
+                                    email=partner_information['email'],
+                                    role=partner_information.get('role', ""),
+                                    phone=partner_information.get('partner_user_id', None),
+                                    created_at=str(partner_information.get('created_at', None))
+                                )
+                                customer['partner'] = member.dict()
+                                customer.pop('password', None)
+                                customer.pop('old_passwords', None)
+                                customer['tickets'] = customer.get('tickets', [])
+                                customer['ticket_count'] = len(customer['tickets'])
+                                customers.append(customer)
+                        else:
+                            continue
 
             return customers
 

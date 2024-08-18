@@ -21,7 +21,7 @@ class Ticket(BaseModel):
     partner: Optional[str] = None
     admin: Optional[str] = None
     status: str = "open"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
     current_status: Optional[str] = None
     last_message: Field(default_factory=dict) = {}
 
@@ -45,7 +45,7 @@ class ChatMessage(BaseModel):
     sender_id: Optional[str] = None
     content: str
     receiver_id: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
     sender_name: Optional[str] = None
     receiver_name: Optional[str] = None
     files: Optional[List[FileMetadata]] = []
@@ -61,7 +61,7 @@ class CloseTicket(BaseModel):
     id: Optional[str] = Field(default=None, alias="_id")
     ticket_id: str
     content: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
     current_status: Optional[str] = None
     status: str
     close_description: str

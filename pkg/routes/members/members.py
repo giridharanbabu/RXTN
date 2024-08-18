@@ -545,9 +545,9 @@ async def login(payload: LoginMemberSchema, response: Response):
                                     detail='Incorrect Email or Password')
 
             # Create access token
-            access_token = user_utils.create_access_token(user['email'], user['name'], 'partner')
+            access_token = user_utils.create_access_token(user['email'], user['name'], 'partner', str(user['id']))
             # Create refresh token
-            refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'partner')
+            refresh_token = user_utils.create_refresh_token(user['email'], user['name'], 'partner', str(user['id']))
 
             # Store refresh and access tokens in cookie
             response.set_cookie('rxtn_member_token', access_token, ACCESS_TOKEN_EXPIRES_IN * 60,

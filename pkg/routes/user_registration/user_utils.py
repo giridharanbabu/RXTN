@@ -32,7 +32,7 @@ def verify_password(password: str, hashed_password: str):
 #     encoded_jwt = jwt.encode(to_encode, settings.SECRET, settings.ALGORITHM)
 #     return encoded_jwt
 
-def create_access_token(subject: Union[str, Any], name: str, role: str, expires_delta: timedelta = None) -> str:
+def create_access_token(subject: Union[str, Any], name: str, role: str, userid: str, expires_delta: timedelta = None) -> str:
     if expires_delta:
         expire = datetime.now() + expires_delta
     else:
@@ -42,7 +42,7 @@ def create_access_token(subject: Union[str, Any], name: str, role: str, expires_
         "exp": expire,
         "email": str(subject),
         "name": name,
-        "role": role
+        "role": role, "id": userid
     }
     encoded_jwt = jwt.encode(to_encode, settings.SECRET, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -59,13 +59,13 @@ def generate_otp():
     return reset_data
 
 
-def create_refresh_token(subject: Union[str, Any], name: str, role: str, expires_delta: int = None) -> str:
+def create_refresh_token(subject: Union[str, Any], name: str, role: str, userid: str, expires_delta: int = None) -> str:
     if expires_delta is not None:
         expires_delta = datetime.now() + expires_delta
     else:
         expires_delta = datetime.now() + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
 
-    to_encode = {"exp": expires_delta, "email": str(subject), "name": name, "role": role}
+    to_encode = {"exp": expires_delta, "email": str(subject), "name": name, "role": role, "id": userid}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET, settings.ALGORITHM)
     return encoded_jwt
 
