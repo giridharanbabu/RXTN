@@ -72,6 +72,7 @@ class PartnerResponse(BaseModel):
     role: Optional[str]
     phone: Optional[str]
     created_at: Optional[str]
+    partner_user_id: Optional[str]
 
 
 class CustomerResponse(BaseModel):

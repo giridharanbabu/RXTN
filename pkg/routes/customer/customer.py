@@ -197,7 +197,10 @@ async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)
 
     if payload['role'] in ['org-admin', 'admin']:
         user = user_collection.find_one({'email': payload['email']})
-        customer_data = customers_collection.find_one({"_id": ObjectId(cus_id)}, {'_id': False})
+        if cus_id is ObjectId:
+            customer_data = customers_collection.find_one({"_id": ObjectId(cus_id)}, {'_id': False})
+        else:
+            customer_data = customers_collection.find_one({"partner_user_id": ObjectId(cus_id)}, {'_id': False})
 
         if not customer_data:
             raise HTTPException(status_code=404, detail="User not found")
@@ -206,6 +209,7 @@ async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)
         customer_data = customers_collection.find_one({"_id": ObjectId(cus_id),
                                                        "partner_id": {"$in": [str(user['partner_user_id'])]}},
                                                       {'_id': False})
+
         if not customer_data:
             raise HTTPException(status_code=404, detail="Customer not found for partner")
     else:
@@ -262,7 +266,8 @@ async def list_customers(token: str = Depends(val_token)):
                         partner_information = member_collections.find_one({"partner_user_id": customer['partner_id'][0]})
                         if partner_information:
                             member = PartnerResponse(
-                                id=str(customer['partner_id'][0]),
+                                partner_user_id=str(customer['partner_id'][0]),
+                                id=str(partner_information['_id']),
                                 name=partner_information['name'],
                                 email=partner_information['email'],
                                 role=partner_information.get('role', ""),
@@ -285,7 +290,8 @@ async def list_customers(token: str = Depends(val_token)):
                                 print(str(partner_information['_id']))
                                 print(str(user['_id']))
                                 member = PartnerResponse(
-                                    id=str(customer['partner_id'][0]),
+                                    partner_user_id=str(customer['partner_id'][0]),
+                                    id=str(partner_information['_id']),
                                     name=partner_information['name'],
                                     email=partner_information['email'],
                                     role=partner_information.get('role', ""),
