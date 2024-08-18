@@ -204,7 +204,7 @@ async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)
     elif payload['role'] == 'partner':
         user = member_collections.find_one({'email': payload['email']})
         customer_data = customers_collection.find_one({"_id": ObjectId(cus_id),
-                                                       "partner_id": {"$in": [str(user['_id'])]}},
+                                                       "partner_id": {"$in": [str(user['partner_user_id'])]}},
                                                       {'_id': False})
         if not customer_data:
             raise HTTPException(status_code=404, detail="Customer not found for partner")
@@ -214,7 +214,7 @@ async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)
     if not user:
         raise HTTPException(status_code=401, detail="User does not have access to view Customer")
     if customer_data['partner_id']:
-        partner_information = member_collections.find_one({"_id": ObjectId(customer_data['partner_id'][0])}, {'_id': False})
+        partner_information = member_collections.find_one({"partner_user_id": customer_data['partner_id'][0]}, {'_id': False})
     else:
         partner_information =[]
     print(customer_data)
