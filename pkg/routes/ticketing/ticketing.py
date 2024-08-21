@@ -5,10 +5,10 @@ from typing import List, Optional
 from bson import ObjectId
 import gridfs
 from pkg.routes.authentication import val_token
-#from pkg.routes.customer.customer import generate_html_message
+# from pkg.routes.customer.customer import generate_html_message
 from pkg.routes.emails import Email
 from pkg.routes.ticketing.ticket_models import Ticket, TicketCreate, ChatMessage, ChatMessageCreate, CloseTicket, \
-    TicketUpdateModel
+    TicketUpdateModel, CategoryCreateModel, PriorityCreateModel
 from pkg.database.database import database
 from datetime import datetime
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -20,6 +20,8 @@ chat_messages_collections = database.get_collection('chat_messages')
 customers_collection = database.get_collection('customers')
 member_collections = database.get_collection('partners')
 user_collection = database.get_collection('users')
+ticket_category_collection = database.get_collection('ticket_category')
+ticket_priority_collection = database.get_collection('ticket_priority')
 
 
 # Utility function to fetch document by ID
@@ -64,7 +66,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
                     tickets_count = len(tickets) + 1
 
             ticket_doc['ticketId'] = 'RXTCH-' + payload['name'] + "-" + str(tickets_count)
-            #customer_details = customers_collection.find_one({'email': payload['email']})
+            # customer_details = customers_collection.find_one({'email': payload['email']})
 
             ticket_doc['customer'] = str(customer_details['_id'])
             ticket_doc["customer_name"] = customer_details['name']
@@ -79,7 +81,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
                     member = member_collections.find_one(
                         {"_id": ObjectId(get_partner)})
                 else:
-                    member = member_collections.find_one({"partner_user_id":get_partner})
+                    member = member_collections.find_one({"partner_user_id": get_partner})
                 ticket_doc['partner'] = str(member['_id'])
                 ticket_doc['partner_name'] = str(member['name'])
                 # update_ticket_status = member_collections.update_one(
@@ -99,7 +101,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
             ticket_info = {"ticket_id": ticket_doc["_id"], "status": ticket_doc["status"],
                            "created_at": ticket_doc["created_at"], "created_by": ticket_doc['customer']}
             update_customer = customers_collection.update_one({'_id': ObjectId(customer_details['_id'])},
-                                                               {'$push': {"tickets":ticket_doc["_id"]}})
+                                                              {'$push': {"tickets": ticket_doc["_id"]}})
 
             return Ticket(**ticket_doc)
         else:
@@ -109,7 +111,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
 
 
 @ticket_router.post("/edit/tickets/{ticket_id}")
-async def update_ticket(ticket_id: str,  ticket_update: TicketUpdateModel, token: str = Depends(val_token)):
+async def update_ticket(ticket_id: str, ticket_update: TicketUpdateModel, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         user = user_collection.find_one({'email': payload["email"]})
@@ -141,40 +143,101 @@ async def update_ticket(ticket_id: str,  ticket_update: TicketUpdateModel, token
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-
-@ticket_router.get("/categories")
-async def aggregate_categories(token: str = Depends(val_token)):
+@ticket_router.post("/categories")
+async def create_category(category_data: CategoryCreateModel, token: str = Depends(val_token)):
+    category_data = category_data.dict()
+    if category_data is None or len(category_data) == 0:
+        raise HTTPException(status_code=400, detail="Invalid category")
     if token[0] is True:
         payload = token[1]
         user = user_collection.find_one({'email': payload["email"]})
 
         if payload['role'] in ['org-admin', "admin", "partner"]:
             if user:
-                # Aggregation pipeline
                 try:
-                    pipeline = [
-                        {
-                            "$group": {
-                                "_id": "$category",  # Group by the 'category' field
-                                "items": {"$push": "$$ROOT"}  # Get a list of all items in each group
-                            }
-                        }
-                    ]
+                    # Check if the category already exists
+                    existing_category = ticket_category_collection.find_one({"category": category_data['category'].lower()})
+                    if existing_category:
+                        raise HTTPException(status_code=400, detail="Category already exists")
 
-                    # Perform the aggregation
-                    results = list(ticket_collection.aggregate(pipeline))
-                    # Structure the response
-                    response = []
-                    for result in results:
-                        if result["_id"] != None:
-                        # category_data = {
-                        #     "category": result["_id"],
-                        # }
-                            response.append(result["_id"])
-                    return {"category": set(response)}
+                    # Insert the new category into the collection
+                    new_category = {"category": category_data['category']}
+                    result = ticket_category_collection.insert_one(new_category)
+
+                    return {"message": "Category created successfully", "category_id": str(result.inserted_id)}
 
                 except Exception as e:
                     raise HTTPException(status_code=500, detail=str(e))
+            else:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view tickets")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@ticket_router.post("/priority")
+async def create_priority(priority_data: PriorityCreateModel, token: str = Depends(val_token)):
+    priority_data = priority_data.dict()
+    if priority_data is None or len(priority_data) == 0:
+        raise HTTPException(status_code=400, detail="Invalid category")
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'email': payload["email"]})
+
+        if payload['role'] in ['org-admin', "admin", "partner"]:
+            if user:
+                try:
+                    # Check if the category already exists
+                    existing_category = ticket_priority_collection.find_one({"priority": priority_data['priority'].lower()})
+                    if existing_category:
+                        raise HTTPException(status_code=400, detail="Category already exists")
+
+                    # Insert the new category into the collection
+                    new_category = {"priority": priority_data['priority']}
+                    result = ticket_priority_collection.insert_one(new_category)
+
+                    return {"message": "priority created successfully", "category_id": str(result.inserted_id)}
+
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+            else:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view tickets")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@ticket_router.get("/ticket/{type}")
+async def aggregate_categories(type, token: str = Depends(val_token)):
+    """
+
+    :param type: priority / category
+    :param token: admin/ partner token
+    :return: list of items
+    """
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'email': payload["email"]})
+
+        if payload['role'] in ['org-admin', "admin", "partner"]:
+            if user:
+                category = []
+                # Aggregation pipeline
+                if type == 'category':
+                    existing_category = ticket_category_collection.find({})
+                    for data in existing_category:
+                        category.append(data['category'])
+                    return {"category": category}
+                elif type == 'priority':
+                    priority = []
+                    existing_priority = ticket_priority_collection.find({})
+                    for data in existing_priority:
+                        priority.append(data['priority'])
+                    return {"priority": priority}
+                else:
+                    raise HTTPException(status_code=400, detail="Invalid Type")
             else:
                 raise HTTPException(status_code=401, detail="Invalid token")
         else:
@@ -271,7 +334,7 @@ async def create_chat_message(
         ticket_id: str,
         content: str = Form(...),
         token: str = Depends(val_token),
-        files:  List[UploadFile] = File([])
+        files: List[UploadFile] = File([])
 ):
     message_doc = {'content': content}
     # message_doc = message.dict()
@@ -315,7 +378,9 @@ async def create_chat_message(
         result = chat_messages_collections.insert_one(message_doc)
         ticket_collection.update_one(
             {'_id': ObjectId(ticket_id)},
-            {'$set': { "current_status": payload['role']+"-responded" ,"last_message": {"role":payload['role'] ,"name":details['name'], "id":str(details['_id']),"message": content,"created_time": datetime.now()}}}
+            {'$set': {"current_status": payload['role'] + "-responded",
+                      "last_message": {"role": payload['role'], "name": details['name'], "id": str(details['_id']),
+                                       "message": content, "created_time": datetime.now()}}}
         )
         message_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
         return ChatMessage(**message_doc)
@@ -355,7 +420,7 @@ async def get_file(file_id: str, token: str = Depends(val_token)):
         raise HTTPException(status_code=401, detail=token[1])
 
 
-@ticket_router.get("/tickets/{ticket_id}/messages")#, response_model=List[ChatMessage])
+@ticket_router.get("/tickets/{ticket_id}/messages")  # , response_model=List[ChatMessage])
 async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
     if not token[0]:
         raise HTTPException(status_code=401, detail=token[1])
@@ -401,8 +466,8 @@ async def get_chat_messages(ticket_id: str, token: str = Depends(val_token)):
                 'receiver_name': str(message['sender_name']) if message['sender_id'] != str(details['_id']) else None,
                 'sender_id': str(message['sender_id']) if message['sender_id'] == str(details['_id']) else None,
                 'sender_name': str(message['sender_name']) if message['sender_id'] == str(details['_id']) else None,
-                'files':  message.get('files', None)
-            # 'files': message['files'] if message['files'] in message else None,
+                'files': message.get('files', None)
+                # 'files': message['files'] if message['files'] in message else None,
             }
             # Filter out None values explicitly
 

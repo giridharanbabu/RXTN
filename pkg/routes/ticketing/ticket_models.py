@@ -78,3 +78,10 @@ class TicketUpdateModel(BaseModel):
     category: Optional[str] = None
     priority: Optional[str] = None
 
+
+class CategoryCreateModel(BaseModel):
+    category: str
+
+
+class PriorityCreateModel(BaseModel):
+    priority: str
