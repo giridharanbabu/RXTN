@@ -326,10 +326,15 @@ async def get_user(token: str = Depends(val_token)):
             if customer:
                 customer['id'] = str(customer['_id'])
                 if customer['partner_id']:
-                    partner_information = member_collections.find_one({"_id": ObjectId(customer['partner_id'][0])})
+                    if ObjectId.is_valid(customer['partner_id'][0]):
+                        partner_information = member_collections.find_one(
+                            {"_id": ObjectId(customer['partner_id'][0])})
+                    else:
+                        partner_information = member_collections.find_one({"partner_user_id": customer['partner_id'][0]})
                     if partner_information:
                         member = PartnerResponse(
-                            id=str(customer['partner_id'][0]),
+                            id= str(partner_information['_id']),
+                            partner_user_id=partner_information['partner_user_id'],
                             name=partner_information['name'],
                             email=partner_information['email'],
                             role=partner_information.get('role', ""),
