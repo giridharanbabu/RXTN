@@ -25,6 +25,8 @@ class Ticket(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     current_status: Optional[str] = None
     last_message: Field(default_factory=dict) = {}
+    category: Optional[str] = None
+    priority: Optional[str] = None
 
     class Config:
         allow_population_by_field_name = True
@@ -69,3 +71,10 @@ class CloseTicket(BaseModel):
     closed_by: str
     role: str
     resolved_date: Optional[datetime]
+
+
+class TicketUpdateModel(BaseModel):
+    status: Optional[str] = None
+    category: Optional[str] = None
+    priority: Optional[str] = None
+

@@ -7,7 +7,8 @@ import gridfs
 from pkg.routes.authentication import val_token
 #from pkg.routes.customer.customer import generate_html_message
 from pkg.routes.emails import Email
-from pkg.routes.ticketing.ticket_models import Ticket, TicketCreate, ChatMessage, ChatMessageCreate, CloseTicket
+from pkg.routes.ticketing.ticket_models import Ticket, TicketCreate, ChatMessage, ChatMessageCreate, CloseTicket, \
+    TicketUpdateModel
 from pkg.database.database import database
 from datetime import datetime
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -107,13 +108,47 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         raise HTTPException(status_code=401, detail=token[1])
 
 
-@ticket_router.get("/aggregate-categories")
+@ticket_router.post("/edit/tickets/{ticket_id}")
+async def update_ticket(ticket_id: str,  ticket_update: TicketUpdateModel, token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'email': payload["email"]})
+
+        if payload['role'] in ['org-admin', "admin", "partner"]:
+            if user:
+                try:
+                    # Convert ticket_id to ObjectId
+                    object_id = ObjectId(ticket_id)
+
+                    # Create the update data dictionary, excluding None values
+                    update_data = {k: v for k, v in ticket_update.dict().items() if v is not None}
+
+                    # Perform the update operation
+                    result = ticket_collection.update_one({"_id": object_id}, {"$set": update_data})
+
+                    if result.matched_count == 0:
+                        raise HTTPException(status_code=404, detail="Ticket not found")
+
+                    return {"message": "Ticket updated successfully"}
+
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+            else:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view tickets")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+
+@ticket_router.get("/categories")
 async def aggregate_categories(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         user = user_collection.find_one({'email': payload["email"]})
 
-        if payload['role'] in ['org-admin', "admin"]:
+        if payload['role'] in ['org-admin', "admin", "partner"]:
             if user:
                 # Aggregation pipeline
                 try:
