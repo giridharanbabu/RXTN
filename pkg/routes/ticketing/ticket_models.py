@@ -12,9 +12,10 @@ class TicketCreate(BaseModel):
 
 class Ticket(BaseModel):
     id: Optional[str] = Field(default=None, alias="_id")
+    ticketId: Optional['str'] = 1
     title: str
     description: str
-    Customer: Optional['str'] = None
+    customer: Optional['str'] = None
     customer_name: Optional[str] = None
     admin_name: Optional[str] = None
     partner_name: Optional[str] = None

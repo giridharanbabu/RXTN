@@ -48,46 +48,104 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         ticket_doc = ticket.dict()
         ticket_doc["status"] = "open"
         ticket_doc["created_at"] = datetime.now()
+        ticket_doc['category'] = None
+        ticket_doc['priority'] = None
         customer_details = customers_collection.find_one({'email': payload['email']})
-        print(customer_details)
-        ticket_doc['customer'] = str(customer_details['_id'])
-        ticket_doc["customer_name"] = customer_details['name']
-        subject = f"Query Raised: Request from  {customer_details['email']}"
-        body = f"Description:\n\n{ticket_doc['description']}"
+        if customer_details:
+            tickets = ticket_collection.find_one({customer_details['role']: str(customer_details['_id'])})
+            print({customer_details['role']: str(customer_details['_id'])})
+            print(tickets)
+            tickets_count = 1
+            if ticket:
+                if len(tickets) == 0:
+                    tickets_count = 1
+                else:
+                    tickets_count = len(tickets) + 1
 
-        if len(customer_details['partner_id']):
+            ticket_doc['ticketId'] = 'RXTCH-' + payload['name'] + "-" + str(tickets_count)
+            #customer_details = customers_collection.find_one({'email': payload['email']})
 
-            get_partner = customer_details['partner_id'][0]
-            ticket_doc['partner'] = str(get_partner)
-            if ObjectId.is_valid(get_partner):
-                member = member_collections.find_one(
-                    {"_id": ObjectId(get_partner)})
-            else:
-                member = member_collections.find_one({"partner_user_id":get_partner})
-            ticket_doc['partner'] = str(member['_id'])
-            ticket_doc['partner_name'] = str(member['name'])
-            # update_ticket_status = member_collections.update_one(
-            #     {'_id': ObjectId(member['_id'])},
-            #     {'$set': {'tickets': tickets}}
-            # )
-            await Email(subject, member['email'], 'query_request', body).send_email()
-        admin_email = "giri1208srinivas@gmail.com"
+            ticket_doc['customer'] = str(customer_details['_id'])
+            ticket_doc["customer_name"] = customer_details['name']
+            subject = f"Query Raised: Request from  {customer_details['email']}"
+            body = f"Description:\n\n{ticket_doc['description']}"
 
-        await Email(subject, admin_email, 'query_request', body).send_email()
-        user_details = user_collection.find_one({'email': admin_email})
-        ticket_doc['admin'] = str(user_details['_id'])
-        ticket_doc['admin_name'] = user_details['name']
-        result = ticket_collection.insert_one(ticket_doc)
-        ticket_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
-        # return ticket_doc
-        ticket_info = {"ticket_id": ticket_doc["_id"], "status": ticket_doc["status"],
-                       "created_at": ticket_doc["created_at"], "created_by": ticket_doc['customer']}
-        update_customer = customers_collection.update_one({'_id': ObjectId(customer_details['_id'])},
-                                                           {'$push': {"tickets":ticket_doc["_id"]}})
+            if len(customer_details['partner_id']):
 
-        return Ticket(**ticket_doc)
+                get_partner = customer_details['partner_id'][0]
+                ticket_doc['partner'] = str(get_partner)
+                if ObjectId.is_valid(get_partner):
+                    member = member_collections.find_one(
+                        {"_id": ObjectId(get_partner)})
+                else:
+                    member = member_collections.find_one({"partner_user_id":get_partner})
+                ticket_doc['partner'] = str(member['_id'])
+                ticket_doc['partner_name'] = str(member['name'])
+                # update_ticket_status = member_collections.update_one(
+                #     {'_id': ObjectId(member['_id'])},
+                #     {'$set': {'tickets': tickets}}
+                # )
+                await Email(subject, member['email'], 'query_request', body).send_email()
+            admin_email = "giri1208srinivas@gmail.com"
+
+            await Email(subject, admin_email, 'query_request', body).send_email()
+            user_details = user_collection.find_one({'email': admin_email})
+            ticket_doc['admin'] = str(user_details['_id'])
+            ticket_doc['admin_name'] = user_details['name']
+            result = ticket_collection.insert_one(ticket_doc)
+            ticket_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
+            # return ticket_doc
+            ticket_info = {"ticket_id": ticket_doc["_id"], "status": ticket_doc["status"],
+                           "created_at": ticket_doc["created_at"], "created_by": ticket_doc['customer']}
+            update_customer = customers_collection.update_one({'_id': ObjectId(customer_details['_id'])},
+                                                               {'$push': {"tickets":ticket_doc["_id"]}})
+
+            return Ticket(**ticket_doc)
+        else:
+            raise HTTPException(status_code=404, detail='User not found')
     else:
         raise HTTPException(status_code=401, detail=token[1])
+
+
+@ticket_router.get("/aggregate-categories")
+async def aggregate_categories(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'email': payload["email"]})
+
+        if payload['role'] in ['org-admin', "admin"]:
+            if user:
+                # Aggregation pipeline
+                try:
+                    pipeline = [
+                        {
+                            "$group": {
+                                "_id": "$category",  # Group by the 'category' field
+                                "items": {"$push": "$$ROOT"}  # Get a list of all items in each group
+                            }
+                        }
+                    ]
+
+                    # Perform the aggregation
+                    results = list(ticket_collection.aggregate(pipeline))
+                    # Structure the response
+                    response = []
+                    for result in results:
+                        if result["_id"] != None:
+                        # category_data = {
+                        #     "category": result["_id"],
+                        # }
+                            response.append(result["_id"])
+                    return {"category": set(response)}
+
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+            else:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view tickets")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 # Get a ticket by ID
