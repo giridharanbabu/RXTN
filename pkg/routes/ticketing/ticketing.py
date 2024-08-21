@@ -31,7 +31,10 @@ async def get_document_by_id(id):
 
 async def get_document_by_id_byrequester(id, receiver_id, name):
     print({"_id": ObjectId(id), name: receiver_id})
-    doc = ticket_collection.find_one({"_id": ObjectId(id), name: receiver_id})
+    if name == 'admin':
+        doc = ticket_collection.find_one({"_id": ObjectId(id)})
+    else:
+        doc = ticket_collection.find_one({"_id": ObjectId(id), name: receiver_id})
     if doc:
         doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
     return doc
@@ -46,15 +49,21 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         ticket_doc["status"] = "open"
         ticket_doc["created_at"] = datetime.now()
         customer_details = customers_collection.find_one({'email': payload['email']})
+        print(customer_details)
         ticket_doc['customer'] = str(customer_details['_id'])
         ticket_doc["customer_name"] = customer_details['name']
         subject = f"Query Raised: Request from  {customer_details['email']}"
         body = f"Description:\n\n{ticket_doc['description']}"
 
         if len(customer_details['partner_id']):
+
             get_partner = customer_details['partner_id'][0]
             ticket_doc['partner'] = str(get_partner)
-            member = member_collections.find_one({'_id': ObjectId(get_partner)})
+            if ObjectId.is_valid(get_partner):
+                member = member_collections.find_one(
+                    {"_id": ObjectId(get_partner)})
+            else:
+                member = member_collections.find_one({"partner_user_id":get_partner})
             ticket_doc['partner'] = str(member['_id'])
             ticket_doc['partner_name'] = str(member['name'])
             # update_ticket_status = member_collections.update_one(
