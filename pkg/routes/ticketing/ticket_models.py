@@ -10,6 +10,12 @@ class TicketCreate(BaseModel):
     description: str
 
 
+class AssignTicket(BaseModel):
+    role: Optional[str] = None
+    partner_id: str
+    ticket_id: str
+
+
 class Ticket(BaseModel):
     id: Optional[str] = Field(default=None, alias="_id")
     ticketId: Optional['str'] = 1
@@ -73,10 +79,13 @@ class CloseTicket(BaseModel):
     resolved_date: Optional[datetime]
 
 
+
+
 class TicketUpdateModel(BaseModel):
     status: Optional[str] = None
     category: Optional[str] = None
     priority: Optional[str] = None
+
 
 
 class CategoryCreateModel(BaseModel):

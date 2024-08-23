@@ -8,7 +8,7 @@ from pkg.routes.authentication import val_token
 # from pkg.routes.customer.customer import generate_html_message
 from pkg.routes.emails import Email
 from pkg.routes.ticketing.ticket_models import Ticket, TicketCreate, ChatMessage, ChatMessageCreate, CloseTicket, \
-    TicketUpdateModel, CategoryCreateModel, PriorityCreateModel
+    TicketUpdateModel, CategoryCreateModel, PriorityCreateModel, AssignTicket
 from pkg.database.database import database
 from datetime import datetime
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -95,6 +95,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
             user_details = user_collection.find_one({'email': admin_email})
             ticket_doc['admin'] = str(user_details['_id'])
             ticket_doc['admin_name'] = user_details['name']
+            ticket_doc['assign'] = {"role": 'admin', "id": str(user_details['_id']), "username": user_details['name']}
             result = ticket_collection.insert_one(ticket_doc)
             ticket_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
             # return ticket_doc
@@ -110,12 +111,63 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         raise HTTPException(status_code=401, detail=token[1])
 
 
+@ticket_router.post("/ticket/assign")
+async def assign_ticket(ticket_info: AssignTicket, token: str = Depends(val_token)):
+    ticket_info = ticket_info.dict()
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'email': payload["email"]})
+        if payload['role'] in ['org-admin', "admin"]:
+            if user:
+                try:
+                    member_details = member_collections.find_one({"_id": ObjectId(ticket_info['partner_id'])})
+                    if member_details:
+                        ticket_details = ticket_collection.find_one({"_id": ObjectId(ticket_info['ticket_id'])})
+                        if ticket_details:
+                            customer_details = customers_collection.find_one({'_id': ObjectId(ticket_details['customer'])})
+                            if customer_details:
+
+                                update_ticket = ticket_collection.update_one(
+                                    {'_id': ObjectId(ticket_info['ticket_id'])},
+                                    {'$set': {
+                                        'partner': str(member_details['_id']),
+                                        'partner_name': member_details['name'],
+                                        'assign': {
+                                            'role': member_details['role'],
+                                            'id': str(member_details['_id']),
+                                            'username': member_details['name']
+                                        }
+                                    }}
+                                )
+                                if update_ticket:
+                                    subject = f"Query Raised: Request from  {customer_details['email']}"
+                                    body = f"Description:\n\n{ticket_details['description']}"
+                                    await Email(subject, member_details['email'], 'partner_request', body).send_email()
+                                    return {"Updated Ticket Id": str(ticket_info['ticket_id'])}
+                                else:
+                                    raise HTTPException(status_code=400, detail="Failed to Update Ticket")
+                            else:
+                                raise HTTPException(status_code=404, detail="Customer not Found")
+                        else:
+                            raise HTTPException(status_code=404, detail="Ticket id not Found")
+                    else:
+                        raise HTTPException(status_code=404, detail="Partner not Found")
+
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+            else:
+                raise HTTPException(status_code=404, detail="User not Found")
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view tickets")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
 @ticket_router.post("/edit/tickets/{ticket_id}")
 async def update_ticket(ticket_id: str, ticket_update: TicketUpdateModel, token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
         user = user_collection.find_one({'email': payload["email"]})
-
         if payload['role'] in ['org-admin', "admin", "partner"]:
             if user:
                 try:
@@ -156,7 +208,8 @@ async def create_category(category_data: CategoryCreateModel, token: str = Depen
             if user:
                 try:
                     # Check if the category already exists
-                    existing_category = ticket_category_collection.find_one({"category": category_data['category'].lower()})
+                    existing_category = ticket_category_collection.find_one(
+                        {"category": category_data['category'].lower()})
                     if existing_category:
                         raise HTTPException(status_code=400, detail="Category already exists")
 
@@ -189,7 +242,8 @@ async def create_priority(priority_data: PriorityCreateModel, token: str = Depen
             if user:
                 try:
                     # Check if the category already exists
-                    existing_category = ticket_priority_collection.find_one({"priority": priority_data['priority'].lower()})
+                    existing_category = ticket_priority_collection.find_one(
+                        {"priority": priority_data['priority'].lower()})
                     if existing_category:
                         raise HTTPException(status_code=400, detail="Category already exists")
 

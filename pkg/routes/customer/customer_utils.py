@@ -22,7 +22,10 @@ def hash_password(password: str):
 
 
 def verify_password(password: str, hashed_password: str):
-    return pwd_context.verify(password, hashed_password)
+    try:
+        return pwd_context.verify(password, hashed_password)
+    except:
+        return None
 # def verify_password(plain_password, hashed_password):
 #     # Verify the plain password against the hashed password
 #     return hash_password(plain_password) == hashed_password

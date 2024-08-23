@@ -15,6 +15,7 @@ class Members(BaseModel):
     role: str
     created_at: datetime
     phone: str
+    partner_user_id: Optional[str]
     photo: Optional[List[FileMetadata]] = []
     status: str = "approved"
     secondary_contact: Optional[str] or None = None

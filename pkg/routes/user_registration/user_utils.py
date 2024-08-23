@@ -21,17 +21,6 @@ def verify_password(password: str, hashed_password: str):
     return pwd_context.verify(password, hashed_password)
 
 
-# def create_access_token(subject: Union[str, Any], name: str, role: str, expires_delta: int = None) -> str:
-#     print(expires_delta)
-#     if expires_delta is not None:
-#         expires_delta = datetime.now() + expires_delta
-#     else:
-#         expires_delta = datetime.now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-#     print(expires_delta)
-#     to_encode = {"exp": expires_delta, "email": str(subject), "name": name, "role": role}
-#     encoded_jwt = jwt.encode(to_encode, settings.SECRET, settings.ALGORITHM)
-#     return encoded_jwt
-
 def create_access_token(subject: Union[str, Any], name: str, role: str, userid: str, expires_delta: timedelta = None) -> str:
     if expires_delta:
         expire = datetime.now() + expires_delta
