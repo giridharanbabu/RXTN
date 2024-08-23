@@ -32,6 +32,17 @@ async def get_document_by_id(id):
     return doc
 
 
+def generate_ticket_number():
+    import string
+    import random
+    length = 6
+    # Define the characters to use in the ticket number (alphanumeric)
+    characters = string.ascii_uppercase + string.digits
+    # Generate a random sequence of the defined length
+    ticket_number = ''.join(random.choice(characters) for _ in range(length))
+    return ticket_number
+
+
 async def get_document_by_id_byrequester(id, receiver_id, name):
     print({"_id": ObjectId(id), name: receiver_id})
     if name == 'admin':
@@ -56,16 +67,16 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
         customer_details = customers_collection.find_one({'email': payload['email']})
         if customer_details:
             tickets = ticket_collection.find_one({customer_details['role']: str(customer_details['_id'])})
-            print({customer_details['role']: str(customer_details['_id'])})
-            print(tickets)
-            tickets_count = 1
-            if ticket:
-                if len(tickets) == 0:
-                    tickets_count = 1
-                else:
-                    tickets_count = len(tickets) + 1
+            # print({customer_details['role']: str(customer_details['_id'])})
+            # print(tickets)
+            # tickets_count = 1
+            # if ticket:
+            #     if len(tickets) == 0:
+            #         tickets_count = 1
+            #     else:
+            #         tickets_count = len(tickets) + 1
 
-            ticket_doc['ticketId'] = 'RXTCH-' + payload['name'] + "-" + str(tickets_count)
+            ticket_doc['ticketId'] = 'RXTCH' + generate_ticket_number()  # payload['name'] + "-" + str(tickets_count)
             # customer_details = customers_collection.find_one({'email': payload['email']})
 
             ticket_doc['customer'] = str(customer_details['_id'])
@@ -124,7 +135,8 @@ async def assign_ticket(ticket_info: AssignTicket, token: str = Depends(val_toke
                     if member_details:
                         ticket_details = ticket_collection.find_one({"_id": ObjectId(ticket_info['ticket_id'])})
                         if ticket_details:
-                            customer_details = customers_collection.find_one({'_id': ObjectId(ticket_details['customer'])})
+                            customer_details = customers_collection.find_one(
+                                {'_id': ObjectId(ticket_details['customer'])})
                             if customer_details:
 
                                 update_ticket = ticket_collection.update_one(
