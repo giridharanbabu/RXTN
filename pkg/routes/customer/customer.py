@@ -313,7 +313,7 @@ async def list_customers(token: str = Depends(val_token)):
                                 name=partner_information['name'],
                                 email=partner_information['email'],
                                 role=partner_information.get('role', ""),
-                                phone=partner_information.get('partner_user_id', None),
+                                phone=partner_information.get('phone', None),
                                 created_at=str(partner_information.get('created_at', None))
                             )
                             customer['partner'] = member.dict()
@@ -338,7 +338,7 @@ async def list_customers(token: str = Depends(val_token)):
                                     name=partner_information['name'],
                                     email=partner_information['email'],
                                     role=partner_information.get('role', ""),
-                                    phone=partner_information.get('partner_user_id', None),
+                                    phone=partner_information.get('phone', None),
                                     created_at=str(partner_information.get('created_at', None))
                                 )
                                 customer['partner'] = member.dict()

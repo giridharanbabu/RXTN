@@ -84,7 +84,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
             #     else:
             #         tickets_count = len(tickets) + 1
 
-            ticket_doc['ticketId'] = 'RXTCH' + generate_unique_ticket_number()  # payload['name'] + "-" + str(tickets_count)
+            ticket_doc['ticketId'] = 'RXT' + generate_unique_ticket_number()  # payload['name'] + "-" + str(tickets_count)
 
             # customer_details = customers_collection.find_one({'email': payload['email']})
 
