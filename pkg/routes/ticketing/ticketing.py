@@ -53,6 +53,14 @@ async def get_document_by_id_byrequester(id, receiver_id, name):
         doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
     return doc
 
+def generate_unique_ticket_number():
+    while True:
+        ticket_number = generate_ticket_number()
+        # Check if the ticket number already exists
+        if not ticket_collection.find_one({'ticketid': ticket_number}):
+            return ticket_number
+
+
 
 # Create a new ticket
 @ticket_router.post("/tickets", response_model=Ticket)
@@ -76,7 +84,8 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
             #     else:
             #         tickets_count = len(tickets) + 1
 
-            ticket_doc['ticketId'] = 'RXTCH' + generate_ticket_number()  # payload['name'] + "-" + str(tickets_count)
+            ticket_doc['ticketId'] = 'RXTCH' + generate_unique_ticket_number()  # payload['name'] + "-" + str(tickets_count)
+
             # customer_details = customers_collection.find_one({'email': payload['email']})
 
             ticket_doc['customer'] = str(customer_details['_id'])
