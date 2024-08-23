@@ -53,13 +53,13 @@ async def get_document_by_id_byrequester(id, receiver_id, name):
         doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
     return doc
 
+
 def generate_unique_ticket_number():
     while True:
         ticket_number = generate_ticket_number()
         # Check if the ticket number already exists
         if not ticket_collection.find_one({'ticketid': ticket_number}):
             return ticket_number
-
 
 
 # Create a new ticket
@@ -84,7 +84,8 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
             #     else:
             #         tickets_count = len(tickets) + 1
 
-            ticket_doc['ticketId'] = 'RXT' + generate_unique_ticket_number()  # payload['name'] + "-" + str(tickets_count)
+            ticket_doc[
+                'ticketId'] = 'RXT' + generate_unique_ticket_number()  # payload['name'] + "-" + str(tickets_count)
 
             # customer_details = customers_collection.find_one({'email': payload['email']})
 
@@ -104,18 +105,23 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
                     member = member_collections.find_one({"partner_user_id": get_partner})
                 ticket_doc['partner'] = str(member['_id'])
                 ticket_doc['partner_name'] = str(member['name'])
+                ticket_doc['assign'] = {"role": 'partner', "id": str(member['_id']),
+                                        "username": member['name']}
                 # update_ticket_status = member_collections.update_one(
                 #     {'_id': ObjectId(member['_id'])},
                 #     {'$set': {'tickets': tickets}}
                 # )
                 await Email(subject, member['email'], 'query_request', body).send_email()
+            else:
+                ticket_doc['assign'] = {"role": None, "id": None,
+                                        "username": None}
             admin_email = "giri1208srinivas@gmail.com"
 
             await Email(subject, admin_email, 'query_request', body).send_email()
             user_details = user_collection.find_one({'email': admin_email})
             ticket_doc['admin'] = str(user_details['_id'])
             ticket_doc['admin_name'] = user_details['name']
-            ticket_doc['assign'] = {"role": 'admin', "id": str(user_details['_id']), "username": user_details['name']}
+
             result = ticket_collection.insert_one(ticket_doc)
             ticket_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
             # return ticket_doc

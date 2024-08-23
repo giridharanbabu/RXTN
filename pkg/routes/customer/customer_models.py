@@ -121,3 +121,8 @@ class VerifyOtpRequest(BaseModel):
     email: EmailStr
     otp: str
     new_password: str
+
+
+class AssignCustomer(BaseModel):
+    partner_user_id: str
+    customer_id: str

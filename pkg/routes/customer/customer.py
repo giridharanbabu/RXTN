@@ -281,6 +281,50 @@ async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)
     return customer
 
 
+@customer_router.post("/customer/assign")
+async def assign_ticket(partner_info: AssignCustomer, token: str = Depends(val_token)):
+    partner_info = partner_info.dict()
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'email': payload["email"]})
+        if payload['role'] in ['org-admin', "admin"]:
+            if user:
+                try:
+                    if ObjectId.is_valid(partner_info['partner_user_id']):
+                        member_details = member_collections.find_one(
+                            {"_id": ObjectId(partner_info['partner_user_id'])})
+                    else:
+                        member_details = member_collections.find_one(
+                            {"partner_user_id": partner_info['partner_user_id']})
+                    if member_details:
+                        customer_details = customers_collection.find_one(
+                            {'_id': ObjectId(partner_info['customer_id'])})
+                        if customer_details:
+                            update_ticket = customers_collection.update_one(
+                                {'_id': ObjectId(partner_info['customer_id'])},
+                                {'$set': {
+                                    'partner_id': [str(member_details['partner_user_id'])]
+                                }}
+                            )
+                            if update_ticket:
+                                return {"msg":"Customer assigned to partner"}
+                            else:
+                                raise HTTPException(status_code=400, detail="Failed to assign partner")
+                        else:
+                            raise HTTPException(status_code=404, detail="Customer not Found")
+                    else:
+                        raise HTTPException(status_code=404, detail="Partner not Found")
+
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+            else:
+                raise HTTPException(status_code=404, detail="User not Found")
+        else:
+            raise HTTPException(status_code=401, detail="User does not have access to view tickets")
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
 # List partners route
 @customer_router.get("/customers")
 async def list_customers(token: str = Depends(val_token)):
