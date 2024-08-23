@@ -24,15 +24,56 @@ ticket_collection = database.get_collection('tickets')
 chat_messages_collections = database.get_collection('chat_messages')
 
 
-@customer_router.post("/customer/cp/register/")
-def existing_customer(details):
-    details = json.loads(details)
-    result = customers_collection.insert_one(details)
-    if result.inserted_id:
-        return {"status": f"New Customer- {details['name']} added",
-                'message': 'Temporary password successfully sent to your email'}
+@customer_router.post("/customer/register/")
+async def customer_register(customer: Customer, token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] in ['admin', 'org-admin']:
+            details = customer.dict()
+            if details['role'] == 'customer':
+                customer_collection = database.get_collection('customers')
+                print(customer_collection)
+                customer = customers_collection.find_one({'email': details["email"]})
+
+                try:
+                    if customer:
+                        raise HTTPException(status_code=409, detail=f"Customer Email- {customer['email']} Exists")
+                    else:
+                        #     partner_details = partner_details
+                        details['role'] = "customer"
+                        details['verified'] = True
+                        # Generate and hash a temporary password
+                        temp_password = generate_temp_password()
+                        hashed_temp_password = hash_password(temp_password)
+                        details['password'] = hashed_temp_password
+                        details['register'] = {"role": payload['role'],"id": payload['id']}
+
+                        # # Update details with partner information if available
+                        # if partner_details:
+                        #     details['partner_id'] = [partner_details['_id']]
+                        #     details['User_ids'] = partner_details.get('User_ids', [])
+
+                        # Insert details into the customers collection
+                        result = customers_collection.insert_one(details)
+
+                        # Send an email with the temporary password
+                        await Email(temp_password, details['email'], 'customer_register').send_email()
+
+                        if result.inserted_id:
+                            return {
+                                "status": f"New Customer - {details['name']} added",
+                                "message": "Temporary password successfully sent to your email"
+                            }
+
+                except bson.errors.InvalidId:
+                    raise HTTPException(status_code=400, detail="Unable to update Customer details")
+            else:
+                raise HTTPException(status_code=400, detail="Enter proper role - customer")
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Invalid token or user not authorized')
     else:
-        raise HTTPException(status_code=500, detail="Failed to insert data")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token/ token Expired')
 
 
 async def customer_register(details):
@@ -52,7 +93,7 @@ async def customer_register(details):
     # else:
     #     # If 'partner_id' is not provided or is empty
     #     partner_details = partner_details
-    details['role'] = "Customer"
+    details['role'] = "customer"
     details['verified'] = True
     # Generate and hash a temporary password
     temp_password = generate_temp_password()
@@ -79,7 +120,7 @@ async def customer_register(details):
         raise HTTPException(status_code=500, detail="Failed to insert data")
 
 
-@customer_router.post("/customer/register")
+@customer_router.post("/customer/signup")
 async def create_customer(customer: Customer):
     details = customer.dict()
     if details['role'] == 'customer':
@@ -188,7 +229,6 @@ async def user_login(request: Request):
 
 @customer_router.get("/customer/info/{cus_id}")
 async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)):
-
     if token[0] is not True:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -218,9 +258,10 @@ async def list_customers_info_by_id(cus_id: str, token: str = Depends(val_token)
     if not user:
         raise HTTPException(status_code=401, detail="User does not have access to view Customer")
     if customer_data['partner_id']:
-        partner_information = member_collections.find_one({"partner_user_id": customer_data['partner_id'][0]}, {'_id': False})
+        partner_information = member_collections.find_one({"partner_user_id": customer_data['partner_id'][0]},
+                                                          {'_id': False})
     else:
-        partner_information =[]
+        partner_information = []
     print(customer_data)
     tickets = []
     if 'tickets' in customer_data:
@@ -263,7 +304,8 @@ async def list_customers(token: str = Depends(val_token)):
                 customer["_id"] = str(customer["_id"])
                 if payload['role'] in ['org-admin', "admin"]:
                     if customer['partner_id']:
-                        partner_information = member_collections.find_one({"partner_user_id": customer['partner_id'][0]})
+                        partner_information = member_collections.find_one(
+                            {"partner_user_id": customer['partner_id'][0]})
                         if partner_information:
                             member = PartnerResponse(
                                 partner_user_id=str(customer['partner_id'][0]),
@@ -284,7 +326,8 @@ async def list_customers(token: str = Depends(val_token)):
 
                     print("-------", customer)
                     if customer['partner_id']:
-                        partner_information = member_collections.find_one({"partner_user_id": customer['partner_id'][0]})
+                        partner_information = member_collections.find_one(
+                            {"partner_user_id": customer['partner_id'][0]})
                         if partner_information:
                             if str(partner_information['_id']) == str(user['_id']):
                                 print(str(partner_information['_id']))
@@ -330,10 +373,11 @@ async def get_user(token: str = Depends(val_token)):
                         partner_information = member_collections.find_one(
                             {"_id": ObjectId(customer['partner_id'][0])})
                     else:
-                        partner_information = member_collections.find_one({"partner_user_id": customer['partner_id'][0]})
+                        partner_information = member_collections.find_one(
+                            {"partner_user_id": customer['partner_id'][0]})
                     if partner_information:
                         member = PartnerResponse(
-                            id= str(partner_information['_id']),
+                            id=str(partner_information['_id']),
                             partner_user_id=partner_information['partner_user_id'],
                             name=partner_information['name'],
                             email=partner_information['email'],
