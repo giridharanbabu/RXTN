@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pkg.routes import authentication
+from pkg.routes.mf_process import mf_service
 from pkg.routes.ticketing import ticketing
 from pkg.routes.user_registration import user_actions
 from pkg.routes.customer import customer
@@ -9,6 +10,8 @@ from pkg.routes.user_details import factsheet
 from fastapi.security import (OAuth2PasswordBearer)
 # CORS headers
 from fastapi.middleware.cors import CORSMiddleware
+
+from pkg.routes.web_sock import web_socket_service
 
 app = FastAPI()
 
@@ -32,6 +35,8 @@ app.include_router(customer.customer_router, tags=["customer"])
 app.include_router(authentication.auth_router, tags=["authentication"])
 app.include_router(factsheet.master_router, tags=["Client Master Data"])
 app.include_router(ticketing.ticket_router, tags=['Ticketing'])
+app.include_router(mf_service.mf_router, tags=['MFProcess'])
+app.include_router(web_socket_service.websocket_router, tags=['websocket'])
 
 
 @app.get("/health")

@@ -151,16 +151,3 @@ async def update_customer(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
-@mf_router.post("/create-account/")
-def create_account(mf_account: MFAccount):
-    if request.customer_id == mf_account.customer_id and request.fund_name == mf_account.fund_name:
-        request.status = RequestStatus.processed
-        accounts_db.append(mf_account)
-        return {"message": "Account created", "account": mf_account}
-
-
-@mf_router.get("/process-mf/")
-def process_mf():
-    # Process mutual fund transactions
-    processed_accounts = [account for account in accounts_db if account.amount > 0]
-    return {"processed_accounts": processed_accounts}
