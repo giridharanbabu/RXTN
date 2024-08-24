@@ -7,13 +7,13 @@ from starlette import status
 from pkg.database.database import database
 from pkg.routes.authentication import val_token
 from pkg.routes.emails import Email
-from pkg.routes.mf_process.mf_model import MFRequest, MFAccount, RequestStatus
+from pkg.routes.mf_process.mf_model import MFRequest, MFAccount, EditMfprocess
 
 mf_router = APIRouter()
 customers_collection = database.get_collection('customers')
 user_collection = database.get_collection('users')
 member_collections = database.get_collection('members')
-
+mfprocess_collection = database.get_collection('mf_process')
 requests_db = []
 accounts_db = []
 
@@ -31,43 +31,132 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
     mf_request = mf_request.dict()
     if token[0] is True:
         payload = token[1]
-        if payload['role'] == 'customer':
-            customer = customers_collection.find_one({'email': payload["email"]})
-            message = generate_html_message(mf_request)
-            mf_request['pending_changes'] = {
-                **mf_request,
-                'updated_at': datetime.now()
-            }
-            result = customers_collection.update_one(
-                {'_id': customer['_id']},
-                {'$set': {'mf_pending_changes': mf_request['pending_changes']}}
-            )
+        user = user_collection.find_one({'_id': ObjectId(mf_request['admin_id'])})
+        if user:
+            customer = customers_collection.find_one({'_id': ObjectId(mf_request['customer_id'])})
+            if customer:
 
-            if result.modified_count == 0:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                    detail=f'Unable to queue update for this customer.')
+                mf_request['pending_changes'] = {
+                    **mf_request,
+                    'updated_at': datetime.now()
+                }
+                if mf_request['requested_by'] == 'admin':
+                    requester = user['name']
+                else:
+                    requester = customer['name']
+                mf_request_email = {'mftype': mf_request['mftype'], 'amount': mf_request['amount'],
+                                    'frequency': mf_request['frequency'],
+                                    'status': mf_request['status'], "requested_by": requester, 'updated_at': datetime.now()}
+                mf_request['pending_changes']['requested_name'] = requester
+                message = generate_html_message(mf_request_email)
+                if mfprocess_collection.find_one({'_id': ObjectId(mf_request['id'])}):
 
-            admin_email = "giri1208srinivas@gmail.com"
-            subject = f"Approval Required: MF request {customer['email']}"
+                    if mf_request['status'] == "approve":
+                        result = mfprocess_collection.update_one(
+                            {'_id': ObjectId(mf_request['id'])},
+                            {'$push': {'mf_approved': mf_request_email}}
+                        )
+                        result = mfprocess_collection.update_one(
+                            {'_id': ObjectId(mf_request['id'])},
+                            {'$set': mf_request_email}
+                        )
+                    else:
+                        mf_request['pending_changes'] = {
+                            **mf_request['pending_changes'],
+                            'updated_at': datetime.now()
+                        }
+                        result = mfprocess_collection.update_one(
+                            {'customer_id': str(customer['_id'])},
+                            {'$push': {'mf_pending_changes': mf_request['pending_changes']}}
+                        )
+                        if result.modified_count == 0:
+                            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                                detail=f'Unable to update for this customer.')
+                else:
+                    result = mfprocess_collection.insert_one(
+                        {'mftype': mf_request['mftype'], 'customer_id': mf_request['customer_id'],
+                         'admin_id': mf_request['admin_id'],
+                         'mf_pending_changes': [mf_request['pending_changes']]}
+                        )
+                    if not result.inserted_id:
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                            detail=f'Unable to queue update for this customer.')
+                if mf_request['requested_by'] == 'admin':
+                    email = customer['email']
+                    subject = f"Approval Required: MF request {customer['email']}"
+                else:
+                    email = user['email']
+                    subject = f"Approval Required: MF request {customer['email']}"
 
-            if customer['partner_id']:
-                for partner in customer['partner_id']:
-                    member = member_collections.find_one({'_id': ObjectId(partner)})
-                    await Email(subject, member['email'], 'customer_request', message).send_email()
+                if customer['partner_id']:
+                    for partner in customer['partner_id']:
+                        member = member_collections.find_one({'partner_user_id': partner})
+                        if member:
+                            await Email(subject, member['email'], 'customer_request', message).send_email()
 
-            await Email(subject, admin_email, 'customer_request', message).send_email()
+                await Email(subject, email, 'customer_request', message).send_email()
+            else:
+                raise HTTPException(status_code=404, detail='customer not found')
+        else:
+            raise HTTPException(status_code=404, detail='user not found')
     # Notify admin and partner logic here (e.g., send an email)
     return {"message": "Request received and admin notified", "request": mf_request['pending_changes']}
 
 
+@mf_router.post("/customer/mfprocess/")
+async def request_mf(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        user = user_collection.find_one({'_id': ObjectId(payload['id'])})
+        if user:
+            mf_process_cursor = mfprocess_collection.find()
+            resut_list = []
+            for data in mf_process_cursor:
+                data['_id'] = str(data['_id'])
+                resut_list.append(data)
+            return resut_list
+        else:
+            raise HTTPException(status_code=404, detail='user not found')
+
+
+@mf_router.post("/edit/mf_process")
+async def update_customer(
+        edit_mfprocess: EditMfprocess,
+        token: tuple = Depends(val_token)
+):
+    if token[0]:
+        payload = token[1]
+        if payload['role'] in ['org-admin', 'admin', 'customer']:
+            edit_mfprocess = edit_mfprocess.dict(exclude_none=True)
+            edit_mfprocess.pop('partner_id', None)
+
+            mfprocess_details = mfprocess_collection.find_one({'_id': ObjectId(edit_mfprocess["id"])})
+
+            if mfprocess_details:
+                edit_mfprocess['updated_at'] = datetime.now()
+
+                result = mfprocess_collection.update_one({"_id": ObjectId(edit_mfprocess["id"])}, {"$set": edit_mfprocess})
+
+                if result.matched_count == 0:
+                    raise HTTPException(status_code=500, detail="Failed to apply changes.")
+                if result.modified_count == 0:
+                    return {"message": "No changes made to the mf data"}
+
+                return {"message": f"{mfprocess_details['mftype']} updated successfully"}
+            else:
+                raise HTTPException(status_code=404, detail=f"Customer {edit_customer['email']} does not exist")
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token or user not authorized')
+    else:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
 @mf_router.post("/create-account/")
 def create_account(mf_account: MFAccount):
-    for request in requests_db:
-        if request.customer_id == mf_account.customer_id and request.fund_name == mf_account.fund_name:
-            request.status = RequestStatus.processed
-            accounts_db.append(mf_account)
-            return {"message": "Account created", "account": mf_account}
-    raise HTTPException(status_code=404, detail="Request not found")
+    if request.customer_id == mf_account.customer_id and request.fund_name == mf_account.fund_name:
+        request.status = RequestStatus.processed
+        accounts_db.append(mf_account)
+        return {"message": "Account created", "account": mf_account}
 
 
 @mf_router.get("/process-mf/")

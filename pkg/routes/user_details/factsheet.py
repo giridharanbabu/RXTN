@@ -1,14 +1,24 @@
-from fastapi import FastAPI, APIRouter
+from datetime import datetime
+
+from bson import ObjectId
+from fastapi import FastAPI, APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
+
+from pkg.database.database import database
+from pkg.database.database import user_collection
+from pkg.routes.authentication import val_token
+from pkg.routes.customer.customer import customers_collection
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI()
 master_router = APIRouter()
+
+financial_cal_collection = database.get_collection('financial_cal')
 
 
 # Define the Pydantic model for input items
@@ -27,6 +37,7 @@ class EmergencyFund(BaseModel):
 
 
 class FinancialDetailsInput(BaseModel):
+    customer_id: str
     details: List[Dict[str, FinancialItem]]
     Emergency: List[Dict[str, EmergencyFund]]
     sip: List[Dict[str, Sip]]
@@ -157,22 +168,63 @@ def calculate_sip(sip: List[Dict[str, Sip]]):
 
 
 @master_router.post("/calculate")
-def calculate(input_data: FinancialDetailsInput):
-    take_home = 0.0
-    for item in input_data.details:
-        if 'take_home' in item:
-            take_home = item['take_home'].value
-            break
-    # if type == 'M':
-    result = {}
-    basic_cal = calculate_values(input_data.details, take_home)
-    emergency_fund = calculate_emergency_fund(input_data.Emergency, take_home, basic_cal)
-    print(basic_cal)
-    print(emergency_fund)
-    result['basic_cal'] = basic_cal
-    result['emergency_fund'] = emergency_fund
-    result['sip'] = calculate_sip(input_data.sip)
-    return result
+def calculate(input_data: FinancialDetailsInput, token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] in ['admin', 'org-admin']:
+            user = user_collection.find_one({'_id': ObjectId(payload['id'])})
+        elif payload['role'] == 'customer':
+            user = customers_collection.find_one({'_id': ObjectId(payload['id'])})
+        else:
+            raise HTTPException(status_code=401, detail='user does not access to add calculation')
+        if user:
+            customer = customers_collection.find_one({'_id': ObjectId(input_data.customer_id)})
+            if customer:
+                take_home = 0.0
+                for item in input_data.details:
+                    if 'take_home' in item:
+                        take_home = item['take_home'].value
+                        break
+                # if type == 'M':
+                result = {}
+                basic_cal = calculate_values(input_data.details, take_home)
+                emergency_fund = calculate_emergency_fund(input_data.Emergency, take_home, basic_cal)
+                result['basic_cal'] = basic_cal
+                result['emergency_fund'] = emergency_fund
+                result['sip'] = calculate_sip(input_data.sip)
+                result['updated_at'] = datetime.now()
+                customer = financial_cal_collection.find_one({'customer_id': str(input_data.customer_id)})
+                if customer:
+                    update_result = financial_cal_collection.update_one({'customer_id': str(input_data.customer_id)},
+                                                                        {'$push': {'financial_calculation': result}}
+                                                                        )
+                else:
+                    insert_result = financial_cal_collection.insert_one(
+                        {'customer_id': str(input_data.customer_id),
+                         'financial_calculation': [result]}
+                    )
+                return result
+            else:
+                raise HTTPException(status_code=404, detail='customer not found')
+        else:
+            raise HTTPException(status_code=404, detail='user not found')
+    else:
+        raise HTTPException(status_code=401, detail='Invalid Token/ token expired')
+
+
+@master_router.post("/factsheet")
+async def factsheet_list(token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        financial_cal_cursor = financial_cal_collection.find()
+        resut_list = []
+        for data in financial_cal_cursor:
+            data['_id'] = str(data['_id'])
+            resut_list.append(data)
+        return resut_list
+    else:
+        raise HTTPException(status_code=401, detail='Invalid Token/ token expired')
+
 
 
 @master_router.get("/")
