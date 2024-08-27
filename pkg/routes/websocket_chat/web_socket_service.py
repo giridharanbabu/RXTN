@@ -3,6 +3,9 @@ from typing import List
 from pydantic import BaseModel
 import json
 from pkg.database.database import database
+import uuid
+from datetime import datetime
+import logging
 
 websocket_router = APIRouter()
 chat_collection = database.get_collection("socket_chat")
@@ -31,13 +34,49 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-@websocket_router.websocket("/ws/chat")
-async def websocket_endpoint(websocket: WebSocket):
+# Helper function to create a unique chat ID
+def create_unique_chat_id():
+    return str(uuid.uuid4())
+
+
+connected_users = {}
+
+
+@websocket_router.websocket("/ws/chat/{user_id}/{chat_id}")
+async def websocket_endpoint(user_id, chat_id, websocket: WebSocket):
     await manager.connect(websocket)
+    connected_users[user_id] = websocket
     try:
         while True:
             data = await websocket.receive_text()
-            await manager.broadcast(f"Client says: {data}")
+           # await manager.broadcast(f"Client says: {data}")
+            # Create or update the conversation in MongoDB
+            chat_message = {
+                "user_id": user_id,
+                "message": data,
+                "timestamp": datetime.utcnow()
+            }
+            try:
+                # Append message to the existing chat document, or create it if it doesn't exist
+                chat_collection.update_one(
+                    {"chat_id": chat_id},
+                    {
+                        "$push": {"messages": chat_message},
+                        "$setOnInsert": {
+                            "chat_id": chat_id,
+                            "created_at": datetime.utcnow()
+                        }
+                    },
+                    upsert=True
+                )
+                logging.info(f"Message appended to chat {chat_id}.")
+            except Exception as e:
+                logging.error(f"Error updating chat {chat_id} in MongoDB: {e}")
+
+            # Send the received data to other users in the same chat
+            for user, user_ws in connected_users.items():
+                if user != user_id:
+                    await user_ws.send_text(data)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         await manager.broadcast("Client left the chat")

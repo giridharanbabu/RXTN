@@ -44,7 +44,7 @@ result = chat_collection.create_index(
 import logging
 
 
-@socket_router.websocket("/ws/{user_id}/{chat_id}")
+##@socket_router.websocket("/ws/{user_id}/{chat_id}")
 async def websocket_endpoint(user_id: str, chat_id: str, websocket: WebSocket):
     await websocket.accept()
     connected_users[user_id] = websocket
@@ -95,3 +95,4 @@ async def websocket_endpoint(user_id: str, chat_id: str, websocket: WebSocket):
 # Helper function to create a unique chat ID
 def create_unique_chat_id():
     return str(uuid.uuid4())
+
