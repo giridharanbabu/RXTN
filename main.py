@@ -6,12 +6,11 @@ from pkg.routes.user_registration import user_actions
 from pkg.routes.customer import customer
 from pkg.routes.members import members
 from pkg.routes.user_details import factsheet
+from pkg.routes.websocket_chat import web_socket_service
 # auth
 from fastapi.security import (OAuth2PasswordBearer)
 # CORS headers
 from fastapi.middleware.cors import CORSMiddleware
-
-from pkg.routes.web_sock import web_socket_service
 
 app = FastAPI()
 
@@ -35,8 +34,9 @@ app.include_router(customer.customer_router, tags=["customer"])
 app.include_router(authentication.auth_router, tags=["authentication"])
 app.include_router(factsheet.master_router, tags=["Client Master Data"])
 app.include_router(ticketing.ticket_router, tags=['Ticketing'])
+app.include_router(web_socket_service.websocket_router, tags=['socket'])
 app.include_router(mf_service.mf_router, tags=['MFProcess'])
-app.include_router(web_socket_service.websocket_router, tags=['websocket'])
+
 
 
 @app.get("/health")
@@ -46,4 +46,5 @@ def index():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+
+    uvicorn.run(app, host="0.0.0.0", port=8002)
