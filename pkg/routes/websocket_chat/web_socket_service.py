@@ -49,7 +49,7 @@ async def websocket_endpoint(user_id, chat_id, websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-           # await manager.broadcast(f"Client says: {data}")
+            await manager.broadcast(f"Client says: {data}")
             # Create or update the conversation in MongoDB
             chat_message = {
                 "user_id": user_id,
