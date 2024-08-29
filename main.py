@@ -16,7 +16,7 @@ app = FastAPI()
 
 # CORS url
 origins = [
-    '*'
+    '*', 'https://rxtn.onrender.com'
 ]
 
 # adding middleware

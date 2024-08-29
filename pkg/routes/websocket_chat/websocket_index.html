@@ -13,9 +13,8 @@
 
     <script>
         const userId = prompt("Enter your user ID (e.g., user1, user2):"); // Prompt the user for their user ID
-        const chat_id = prompt("Enter your user ID (e.g., user1, user2):"); // Prompt the user for their chat_id ID
 
-        const ws = new WebSocket(`wss://rxtn.onrender.com/ws/chat/${userId}/${chat_id}`);
+        const ws = new WebSocket(`wss://rxtn.onrender.com/ws/chat/${userId}`);
 
         ws.onmessage = function (event) {
             const outputDiv = document.getElementById("output");

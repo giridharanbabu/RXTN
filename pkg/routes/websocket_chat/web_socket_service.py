@@ -2,6 +2,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, APIRouter
 from typing import List
 from pydantic import BaseModel
 import json
+
+from starlette import status
+
 from pkg.database.database import database
 import uuid
 from datetime import datetime
@@ -42,25 +45,35 @@ def create_unique_chat_id():
 connected_users = {}
 
 
-#@websocket_router.websocket("/ws/chat/{user_id}/{chat_id}")
-@websocket_router.websocket("/ws/{user_id}")
-async def websocket_endpoint(user_id: str, websocket: WebSocket):
-    await websocket.accept()
-
-    # Store the WebSocket connection in the dictionary
-    connected_users[user_id] = websocket
-
+@websocket_router.websocket("/ws/{user_id}/{chat_id}")
+async def websocket_endpoint(user_id: str, chat_id: str, websocket: WebSocket):
     try:
-        while True:
-            data = await websocket.receive_text()
-            # Send the received data to the other user
-            for user, user_ws in connected_users.items():
-                if user != user_id:
-                    await user_ws.send_text(data)
-    except:
-        # If a user disconnects, remove them from the dictionary
-        del connected_users[user_id]
-        await websocket.close()
+        logging.info(f"Attempting WebSocket connection: User {user_id}, Chat {chat_id}")
+        await websocket.accept()
+        # Rest of the WebSocket code...
+    except Exception as e:
+        logging.error(f"WebSocket connection rejected: {e}")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+
+# @websocket_router.websocket("/ws/chat/{user_id}/{chat_id}")
+# @websocket_router.websocket("/ws/{user_id}")
+# async def websocket_endpoint(user_id: str, websocket: WebSocket):
+#     await websocket.accept()
+#
+#     # Store the WebSocket connection in the dictionary
+#     connected_users[user_id] = websocket
+#
+#     try:
+#         while True:
+#             data = await websocket.receive_text()
+#             # Send the received data to the other user
+#             for user, user_ws in connected_users.items():
+#                 if user != user_id:
+#                     await user_ws.send_text(data)
+#     except:
+#         # If a user disconnects, remove them from the dictionary
+#         del connected_users[user_id]
+#         await websocket.close()
 
 # async def websocket_endpoint(user_id, chat_id, websocket: WebSocket):
 #     await manager.connect(websocket)
