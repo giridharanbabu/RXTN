@@ -22,7 +22,7 @@ member_collections = database.get_collection('partners')
 login_activity_collection = database.get_collection('login_activity')
 ticket_collection = database.get_collection('tickets')
 chat_messages_collections = database.get_collection('chat_messages')
-
+notifications_collection = database.get_collection('notifications')
 
 @customer_router.post("/customer/register/")
 async def customer_register(customer: Customer, token: str = Depends(val_token)):
@@ -55,7 +55,14 @@ async def customer_register(customer: Customer, token: str = Depends(val_token))
 
                         # Insert details into the customers collection
                         result = customers_collection.insert_one(details)
-
+                        notification = {
+                            "user_id": payload['id'],
+                            "message": f" New Customer created-  {customer['name']}",
+                            "Customer_id": str(result.inserted_id),
+                            "status": "unread",
+                            "created_at": datetime.now()
+                        }
+                        notification_result = notifications_collection.insert_one(notification)
                         # Send an email with the temporary password
                         await Email(temp_password, details['email'], 'customer_register').send_email()
 

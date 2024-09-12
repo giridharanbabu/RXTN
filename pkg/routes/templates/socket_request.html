@@ -10,7 +10,7 @@
     <button onclick="sendMessage()">Send</button>
 
     <script>
-        var ws = new WebSocket("wss://rxtn.onrender.com/ws/chat/1");
+        var ws = new WebSocket("wss://rxtn.onrender.com/ws/chat/2");
         ws.onmessage = function(event) {
             var messages = document.getElementById('chat-log')
             var message = document.createElement('div')

@@ -22,6 +22,7 @@ member_collections = database.get_collection('partners')
 user_collection = database.get_collection('users')
 ticket_category_collection = database.get_collection('ticket_category')
 ticket_priority_collection = database.get_collection('ticket_priority')
+notifications_collection = database.get_collection('notifications')
 
 
 # Utility function to fetch document by ID
@@ -121,7 +122,15 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
             user_details = user_collection.find_one({'email': admin_email})
             ticket_doc['admin'] = str(user_details['_id'])
             ticket_doc['admin_name'] = user_details['name']
-
+            notification = {
+                "user_id": str(user_details['_id']),
+                "message": f"A new ticket {ticket_doc['ticketId']} has been created.",
+                "ticket_id": str(ticket_doc['ticketId']),
+                "status": "unread",
+                "created_at": datetime.now()
+            }
+            notification_result = notifications_collection.insert_one(notification)
+            ticket_doc['notification_id'] = str(notification_result.inserted_id)
             result = ticket_collection.insert_one(ticket_doc)
             ticket_doc["_id"] = str(result.inserted_id)  # Convert ObjectId to string for response
             # return ticket_doc
@@ -206,7 +215,14 @@ async def update_ticket(ticket_id: str, ticket_update: TicketUpdateModel, token:
 
                     # Perform the update operation
                     result = ticket_collection.update_one({"_id": object_id}, {"$set": update_data})
-
+                    notification = {
+                        "user_id": str(user['_id']),
+                        "message": f" ticket {ticket_id} has been updated.",
+                        "ticket_id": str(ticket_id),
+                        "status": "unread",
+                        "created_at": datetime.now()
+                    }
+                    notification_result = notifications_collection.insert_one(notification)
                     if result.matched_count == 0:
                         raise HTTPException(status_code=404, detail="Ticket not found")
 
@@ -243,7 +259,14 @@ async def create_category(category_data: CategoryCreateModel, token: str = Depen
                     # Insert the new category into the collection
                     new_category = {"category": category_data['category']}
                     result = ticket_category_collection.insert_one(new_category)
-
+                    notification = {
+                        "user_id": str(user['_id']),
+                        "message": f" New Category created-  {category_data['category'].lower()}",
+                        "category_id": str(result.inserted_id),
+                        "status": "unread",
+                        "created_at": datetime.now()
+                    }
+                    notification_result = notifications_collection.insert_one(notification)
                     return {"message": "Category created successfully", "category_id": str(result.inserted_id)}
 
                 except Exception as e:

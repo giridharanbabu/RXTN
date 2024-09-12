@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from pkg.routes import authentication
 from pkg.routes.mf_process import mf_service
+from pkg.routes.notifications import notification
 from pkg.routes.ticketing import ticketing
 from pkg.routes.user_registration import user_actions
 from pkg.routes.customer import customer
@@ -36,7 +37,7 @@ app.include_router(factsheet.master_router, tags=["Client Master Data"])
 app.include_router(ticketing.ticket_router, tags=['Ticketing'])
 app.include_router(web_socket_service.websocket_router, tags=['socket'])
 app.include_router(mf_service.mf_router, tags=['MFProcess'])
-
+app.include_router(notification.notification_router, tags=['Notification'])
 
 
 @app.get("/health")

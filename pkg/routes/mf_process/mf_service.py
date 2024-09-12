@@ -14,6 +14,7 @@ customers_collection = database.get_collection('customers')
 user_collection = database.get_collection('users')
 member_collections = database.get_collection('members')
 mfprocess_collection = database.get_collection('mf_process')
+notifications_collection = database.get_collection('notifications')
 requests_db = []
 accounts_db = []
 
@@ -61,6 +62,7 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
                             {'$set': mf_request_email}
                         )
                     else:
+
                         mf_request['pending_changes'] = {
                             **mf_request['pending_changes'],
                             'updated_at': datetime.now()
@@ -80,7 +82,7 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
                         )
                     if not result.inserted_id:
                         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                            detail=f'Unable to queue update for this customer.')
+                                            detail=f'Unable to update for this customer.')
                 if mf_request['requested_by'] == 'admin':
                     email = customer['email']
                     subject = f"Approval Required: MF request {customer['email']}"

@@ -23,6 +23,7 @@ members_router = APIRouter()
 members_collection = database.get_collection('partners')
 user_collection = database.get_collection('users')
 request_collection = database.get_collection('pt_req_log')
+notifications_collection = database.get_collection('notifications')
 
 
 @members_router.post("/partner/signup")
@@ -174,6 +175,14 @@ async def create_member(member: Members, token: str = Depends(val_token)):
                         update_business_users = members_collection.update_one({'_id': ObjectId(result.inserted_id)}, {
                             '$push': {'User_ids': find_user['_id']}
                         }, upsert=True)
+                        notification = {
+                            "user_id": payload['id'],
+                            "message": f" New Partner created-  {details['name']}",
+                            "partner_id": str(result.inserted_id),
+                            "status": "unread",
+                            "created_at": datetime.now()
+                        }
+                        notification_result = notifications_collection.insert_one(notification)
                         return {"status": f"Partner- {details['name']} added",
                                 'message': 'Temporary password successfully sent to your email'}
                 else:
