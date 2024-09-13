@@ -33,7 +33,7 @@
                 const chatId = document.getElementById('chatId').value;
 
                 // Open WebSocket connection using client_id and chat_id
-                ws = new WebSocket(`ws://localhost:8002/ws/${chatId}/${clientId}`);
+                ws = new WebSocket(`wss://rxtn.onrender.com/ws/${chatId}/${clientId}`);
 
                 ws.onopen = function() {
                     document.getElementById('connectionForm').style.display = 'none';

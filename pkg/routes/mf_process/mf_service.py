@@ -50,7 +50,8 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
                                     'status': mf_request['status'], "requested_by": requester, 'updated_at': datetime.now()}
                 mf_request['pending_changes']['requested_name'] = requester
                 message = generate_html_message(mf_request_email)
-                if mfprocess_collection.find_one({'_id': ObjectId(mf_request['id'])}):
+                if mf_request['id'] and ObjectId.is_valid(mf_request['id']):
+                    find_mf_id = mfprocess_collection.find_one({'_id': ObjectId(mf_request['id'])})
 
                     if mf_request['status'] == "approve":
                         result = mfprocess_collection.update_one(
@@ -106,19 +107,24 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
 
 
 @mf_router.post("/customer/mfprocess/")
-async def request_mf(token: str = Depends(val_token)):
+async def mf_list(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
-        user = user_collection.find_one({'_id': ObjectId(payload['id'])})
-        if user:
-            mf_process_cursor = mfprocess_collection.find()
-            resut_list = []
-            for data in mf_process_cursor:
-                data['_id'] = str(data['_id'])
-                resut_list.append(data)
-            return resut_list
+        if payload['role'] in ['org-admin', 'admin']:
+            user = user_collection.find_one({'_id': ObjectId(payload['id'])})
+            if user:
+                mf_process_cursor = mfprocess_collection.find()
+                resut_list = []
+                for data in mf_process_cursor:
+                    data['_id'] = str(data['_id'])
+                    resut_list.append(data)
+                return resut_list
+            else:
+                raise HTTPException(status_code=404, detail='user not found')
         else:
-            raise HTTPException(status_code=404, detail='user not found')
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token or user not authorized')
+    else:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
 @mf_router.post("/edit/mf_process")
