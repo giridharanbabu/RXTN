@@ -30,6 +30,7 @@ def generate_html_message(changes: dict) -> str:
 @mf_router.post("/request-mf/")
 async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
     mf_request = mf_request.dict()
+    print(token[0])
     if token[0] is True:
         payload = token[1]
         user = user_collection.find_one({'_id': ObjectId(mf_request['admin_id'])})
@@ -50,6 +51,7 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
                                     'status': mf_request['status'], "requested_by": requester, 'updated_at': datetime.now()}
                 mf_request['pending_changes']['requested_name'] = requester
                 message = generate_html_message(mf_request_email)
+                print(mf_request['id'])
                 if mf_request['id'] and ObjectId.is_valid(mf_request['id']):
                     find_mf_id = mfprocess_collection.find_one({'_id': ObjectId(mf_request['id'])})
 
@@ -102,6 +104,8 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
                 raise HTTPException(status_code=404, detail='customer not found')
         else:
             raise HTTPException(status_code=404, detail='user not found')
+    else:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     # Notify admin and partner logic here (e.g., send an email)
     return {"message": "Request received and admin notified", "request": mf_request['pending_changes']}
 
