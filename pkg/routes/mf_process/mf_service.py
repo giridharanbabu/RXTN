@@ -12,7 +12,7 @@ from pkg.routes.mf_process.mf_model import MFRequest, MFAccount, EditMfprocess
 mf_router = APIRouter()
 customers_collection = database.get_collection('customers')
 user_collection = database.get_collection('users')
-member_collections = database.get_collection('members')
+member_collections = database.get_collection('partners')
 mfprocess_collection = database.get_collection('mf_process')
 notifications_collection = database.get_collection('notifications')
 requests_db = []
@@ -51,7 +51,6 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
                                     'status': mf_request['status'], "requested_by": requester, 'updated_at': datetime.now()}
                 mf_request['pending_changes']['requested_name'] = requester
                 message = generate_html_message(mf_request_email)
-                print(mf_request['id'])
                 if mf_request['id'] and ObjectId.is_valid(mf_request['id']):
                     find_mf_id = mfprocess_collection.find_one({'_id': ObjectId(mf_request['id'])})
 
@@ -95,8 +94,20 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
 
                 if customer['partner_id']:
                     for partner in customer['partner_id']:
-                        member = member_collections.find_one({'partner_user_id': partner})
+                        if isinstance(partner, str) and ObjectId.is_valid(partner):
+                            # Partner is a valid ObjectId
+                            print({'_id': ObjectId(str(partner))})
+                            member = member_collections.find_one({'_id': ObjectId(str(partner))})
+                            print(member)
+                        else:
+                            print("2-0----",ObjectId(partner))
+                            member = member_collections.find_one({'partner_user_id': partner})
                         if member:
+                            print("3",member)
+                            mfprocess_collection.update_one({"_id": ObjectId(str(result.inserted_id))},
+                                                                {"$set": {"partner_user_id": member['partner_user_id'],
+                                                                          "partner_id": str(member['_id']),
+                                                                          "updated_at": datetime.now()}})
                             await Email(subject, member['email'], 'customer_request', message).send_email()
 
                 await Email(subject, email, 'customer_request', message).send_email()
@@ -110,7 +121,7 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
     return {"message": "Request received and admin notified", "request": mf_request['pending_changes']}
 
 
-@mf_router.post("/customer/mfprocess/")
+@mf_router.get("/customer/mfprocess/")
 async def mf_list(token: str = Depends(val_token)):
     if token[0] is True:
         payload = token[1]
@@ -163,3 +174,25 @@ async def update_customer(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
+@mf_router.get("/customer/{customer_id}/mfprocess/")
+async def mf_list_by_customer(customer_id,token: str = Depends(val_token)):
+    if token[0] is True:
+        payload = token[1]
+        if payload['role'] in ['org-admin', 'admin']:
+            user = user_collection.find_one({'_id': ObjectId(payload['id'])})
+        elif payload['role'] in ['customer']:
+            user = customers_collection.find_one({'_id': ObjectId(payload['id'])})
+        else:
+            raise HTTPException(status_code=404, detail='user not found')
+        if user:
+            mf_process_cursor = mfprocess_collection.find({'customer_id':str(customer_id)})
+            resut_list = []
+            for data in mf_process_cursor:
+                data['_id'] = str(data['_id'])
+                resut_list.append(data)
+            return resut_list
+
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token or user not authorized')
+    else:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
