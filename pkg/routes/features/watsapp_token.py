@@ -1,38 +1,63 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
+import httpx
 from pydantic import BaseModel
+import json
+from dotenv import load_dotenv
+from twilio.base.exceptions import TwilioRestException
+
+from config.config import settings
 from twilio.rest import Client
-import os
 
-app = FastAPI()
+# Load environment variables from a .env file
+load_dotenv()
 
-# Twilio credentials
-account_sid = "ACca6b2babc4a12a43886d8135d298560a"  # Replace with your Account SID
-auth_token = "00d6cbacdc66c48f3b8463b6ddd2ae4d"  # Replace with your Auth Token
-twilio_whatsapp_number = "whatsapp:+918754481812"  # Replace with your Twilio WhatsApp number
+# Twilio API credentials (replace or store in .env file)
+TWILIO_ACCOUNT_SID = settings.TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN = settings.TWILIO_AUTH_TOKEN
+TWILIO_MESSAGING_SERVICE_SID = settings.TWILIO_MESSAGING_SERVICE_SID
 
-client = Client(account_sid, auth_token)
-
-
-class Message(BaseModel):
-    to: str
-    body: str
+# Base URL for Twilio API
+watsapp_router = APIRouter()
 
 
-@app.post("/send-message/")
-async def send_whatsapp_message(message: Message):
-    # try:
-    # Send WhatsApp message
-    sent_message = client.messages.create(
-        body=message.body,
-        from_=twilio_whatsapp_number,
-        to=f"whatsapp:{message.to}"
-    )
-    return {"status": "Message sent", "message_sid": sent_message.sid}
-    #
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+# Request body schema
+class WhatsAppMessage(BaseModel):
+    to: str  # WhatsApp recipient in the format 'whatsapp:+1234567890'
+    content_sid: str  # Content SID
+    content_variables: dict  # Content variables to replace placeholders
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8011)
+@watsapp_router.post("/send-whatsapp")
+async def send_whatsapp(message: WhatsAppMessage):
+    """
+    Send a WhatsApp message using Twilio API.
+    """
+    try:
+        # Send the request to Twilio API
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+        response = client.messages.create(
+            to=f"whatsapp:{message.to}",
+            from_="whatsapp:+19093414369",  # Replace with your Twilio WhatsApp-enabled number
+            content_sid="HXef5a85174e5b086df17a245cd345945b",#message.content_sid,
+            content_variables=json.dumps(message.content_variables),
+            messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID)
+        # Check for successful response
+        return {
+            "status": "success",
+            "data": {
+                "sid": response.sid,
+                "status": response.status,
+                "to": response.to,
+                "from_": response.from_,
+                "date_created": str(response.date_created),
+                "date_sent": str(response.date_sent),
+                "date_updated": str(response.date_updated),
+                "error_code": response.error_code,
+                "error_message": response.error_message,
+            },
+        }
+
+    except TwilioRestException as e:
+        # raise HTTPException(status_code=500, detail=json.dumps(e))
+        return {"status": "Failed", "data": e}

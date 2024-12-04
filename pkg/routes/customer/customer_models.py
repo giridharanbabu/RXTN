@@ -60,7 +60,8 @@ class EditCustomer(BaseModel):
 
 
 class LoginCustomerSchema(BaseModel):
-    email: EmailStr
+    email: Optional[str] = None
+    phone: Optional[str] = None
     password: constr(min_length=8)
     partner_id: list or None = None
 

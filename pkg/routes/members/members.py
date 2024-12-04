@@ -10,7 +10,7 @@ from pkg.routes.user_registration import user_utils
 from pkg.routes.customer.customer_utils import generate_temp_password, hash_password, generate_html_message, \
     verify_password
 from pkg.database.database import database
-from pkg.routes.authentication import val_token, generate_otp_token
+from pkg.routes.authentication import val_token, generate_otp_token, verify_partner
 from pkg.routes.emails import Email
 from random import randbytes
 import hashlib, base64
@@ -84,8 +84,11 @@ async def create_user(payload: CreateMemberSchema):
             payload_token = payload.dict()
             token = generate_otp_token(payload_token, hotp_v.at(0))
             token = str(token)
-            message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
+            # message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
+            message = verify_partner(token)
+
             await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
+
         except Exception as error:
             members_collection.find_one_and_update({"_id": result.inserted_id}, {
                 "$set": {"verification_code": None, "updated_at": datetime.now()}, "status": "pending"})
@@ -112,7 +115,8 @@ async def partner_verification_code_generation(partner_id: str, token: str = Dep
                 }
                 token = generate_otp_token(payload, member['verification_code'])
                 token = str(token)
-                message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
+                # message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
+                message = verify_partner(token)
                 await Email(f"verification Token", member['email'], 'verification', message=message).send_email()
                 return {"msg": f"verfication sent to Partner {member['email']}"}
             else:
@@ -530,7 +534,7 @@ async def login(payload: LoginMemberSchema, response: Response):
         query['email'] = payload.email
     if payload.username:
         query['partner_user_id'] = payload.username.lower()
-
+        # Check if the user exist
     db_user = members_collection.find_one(query)
     if not db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User not registered')
