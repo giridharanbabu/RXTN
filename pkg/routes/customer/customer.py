@@ -9,7 +9,6 @@ from pkg.database.database import database
 from pkg.routes.authentication import val_token
 from pkg.routes.customer.customer_utils import generate_temp_password, hash_password, verify_password
 from pkg.routes.emails import Email
-from pkg.routes.features.watsapp_token import WhatsAppMessage, send_whatsapp
 from pkg.routes.members.members import members_collection
 from pkg.routes.user_registration import user_utils
 from pkg.routes.serializers.userSerializers import customerEntity
@@ -84,96 +83,41 @@ async def customer_register(customer: Customer, token: str = Depends(val_token))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token/ token Expired')
 
 
-# async def customer_register(details):
-#     # partners = []
-#     # partner_details = None
-#     if 'partner_id' not in details:
-#         details['partner_id'] = []
-#     # Ensure 'partner_id' is present in details and is a non-empty string
-#     # if 'partner_id' in details and details['partner_id']:
-#     #     print(len(details['partner_id']))  # This line might raise an error if partner_id is not a string
-#     #     for partners in details['partner_id']:
-#     #         partner_details = member_collections.find_one({"_id": ObjectId(partners)})
-#     #         details['partner_id'] = [partner_details['_id']]
-#     #         details['User_ids'] = partner_details.get('User_ids', [])
-#     #         if not partner_details:
-#     #             raise HTTPException(status_code=404, detail=f"Invalid Partner Id {details['partner_id']}")
-#     # else:
-#     #     # If 'partner_id' is not provided or is empty
-#     #     partner_details = partner_details
-#     details['role'] = "customer"
-#     details['verified'] = True
-#     # Generate and hash a temporary password
-#     temp_password = generate_temp_password()
-#     hashed_temp_password = hash_password(temp_password)
-#     details['password'] = hashed_temp_password
-#
-#     # # Update details with partner information if available
-#     # if partner_details:
-#     #     details['partner_id'] = [partner_details['_id']]
-#     #     details['User_ids'] = partner_details.get('User_ids', [])
-#
-#     # Insert details into the customers collection
-#     result = customers_collection.insert_one(details)
-#
-#     # Send an email with the temporary password
-#     await Email(temp_password, details['email'], 'customer_register').send_email()
-#
-#     if result.inserted_id:
-#         return {
-#             "status": f"New Customer - {details['name']} added",
-#             "message": "Temporary password successfully sent to your email"
-#         }
-#     else:
-#         raise HTTPException(status_code=500, detail="Failed to insert data")
-#
-#
-#
-#
-# @customer_router.post("/customer/signup")
-# async def create_customer(customer: Customer):
-#     details = customer.dict()
-#     if details['role'] == 'customer':
-#         customer_collection = database.get_collection('customers')
-#         print(customer_collection)
-#         customer = customers_collection.find_one({'email': details["email"]})
-#
-#         try:
-#             if customer:
-#                 raise HTTPException(status_code=409, detail=f"Customer Email- {customer['email']} Exists")
-#             else:
-#                 print("---")
-#                 return await customer_register(details)
-#         except bson.errors.InvalidId:
-#             raise HTTPException(status_code=400, detail="Unable to update Customer details")
-#     else:
-#         raise HTTPException(status_code=400, detail="Enter proper role - Customer")
-
-
 async def customer_register(details):
+    # partners = []
+    # partner_details = None
     if 'partner_id' not in details:
         details['partner_id'] = []
-
+    # Ensure 'partner_id' is present in details and is a non-empty string
+    # if 'partner_id' in details and details['partner_id']:
+    #     print(len(details['partner_id']))  # This line might raise an error if partner_id is not a string
+    #     for partners in details['partner_id']:
+    #         partner_details = member_collections.find_one({"_id": ObjectId(partners)})
+    #         details['partner_id'] = [partner_details['_id']]
+    #         details['User_ids'] = partner_details.get('User_ids', [])
+    #         if not partner_details:
+    #             raise HTTPException(status_code=404, detail=f"Invalid Partner Id {details['partner_id']}")
+    # else:
+    #     # If 'partner_id' is not provided or is empty
+    #     partner_details = partner_details
     details['role'] = "customer"
     details['verified'] = True
-
     # Generate and hash a temporary password
     temp_password = generate_temp_password()
     hashed_temp_password = hash_password(temp_password)
     details['password'] = hashed_temp_password
 
+    # # Update details with partner information if available
+    # if partner_details:
+    #     details['partner_id'] = [partner_details['_id']]
+    #     details['User_ids'] = partner_details.get('User_ids', [])
+
     # Insert details into the customers collection
     result = customers_collection.insert_one(details)
+
     # Send an email with the temporary password
     await Email(temp_password, details['email'], 'customer_register').send_email()
-    if details['phone']:
-        # Sending a WhatsApp message
-        message_data = WhatsAppMessage(
-            to=details['phone'],  # Assume phone number is in the details
-            content_sid= "" ,
-            content_variables= {"1": details['name'], "3": f"Your Temp-Password -{temp_password}" }
-        )
-        whatsapp_response = await send_whatsapp(message_data)
+
     if result.inserted_id:
         return {
             "status": f"New Customer - {details['name']} added",
@@ -187,25 +131,21 @@ async def customer_register(details):
 async def create_customer(customer: Customer):
     details = customer.dict()
     if details['role'] == 'customer':
-        customer_collection = customers_collection  # Mocking database reference
-        existing_customer = customers_collection.find_one({'email': details["email"]}) if hasattr(customers_collection,
-                                                                                                  'find_one') else None
+        customer_collection = database.get_collection('customers')
+        print(customer_collection)
+        customer = customers_collection.find_one({'email': details["email"]})
 
-        if details.get("phone"):
-            existing_phone_customer = customers_collection.find_one({'phone': details["phone"]}) if hasattr(
-                customers_collection, 'find_one') else None
-            if existing_phone_customer:
-                raise HTTPException(status_code=409, detail=f"Customer Phone- {details['phone']} Exists")
-
-        # try:
-        if existing_customer:
-            raise HTTPException(status_code=409, detail=f"Customer Email- {details['email']} Exists")
-        else:
-            return await customer_register(details)
-        # except Exception as e:  # Use appropriate exceptions in real implementation
-        #     raise HTTPException(status_code=400, detail="Unable to update Customer details")
+        try:
+            if customer:
+                raise HTTPException(status_code=409, detail=f"Customer Email- {customer['email']} Exists")
+            else:
+                print("---")
+                return await customer_register(details)
+        except bson.errors.InvalidId:
+            raise HTTPException(status_code=400, detail="Unable to update Customer details")
     else:
         raise HTTPException(status_code=400, detail="Enter proper role - Customer")
+
 
 #
 # @customer_router.post("/edit/customer")
@@ -235,20 +175,10 @@ async def create_customer(customer: Customer):
 @customer_router.post('/customer/login')
 async def login(payload: LoginCustomerSchema, response: Response):
     # Check if the user exist
-    query = {}
-    if payload.email:
-        query['email'] = payload.email.lower()
-    if payload.phone:
-        query['phone'] = payload.phone
-
-    if payload.partner_id:
-        query['partner_id'] = payload.partner_id
-
-    db_user = customers_collection.find_one(query)
-    # if payload.partner_id is None:
-    #     db_user = customers_collection.find_one({'email': payload.email.lower()})
-    # else:-
-    #     db_user = customers_collection.find_one({'email': payload.email.lower(), 'partner_id': payload.partner_id})
+    if payload.partner_id is None:
+        db_user = customers_collection.find_one({'email': payload.email.lower()})
+    else:
+        db_user = customers_collection.find_one({'email': payload.email.lower(), 'partner_id': payload.partner_id})
     if not db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail='User does not Registered')

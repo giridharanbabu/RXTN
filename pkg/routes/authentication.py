@@ -152,7 +152,8 @@ async def verify_me(email: str, otp: str):
 
     result = register.find_one_and_update({"email": email, "verification_code": otp}, {
         "$set": {"verification_code": None, "verified": True, "updated_at": datetime.now()}}, new=True)
-    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'], result['id'])
+    print(result)
+    access_token = user_utils.create_access_token(result['email'], result['name'], result['role'], str(result['_id']))
     if not result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail='Invalid verification code or account already verified')

@@ -38,7 +38,7 @@ class Email:
             port = 465  # For SSL
 
             # Connect to the email server
-            server = SMTP_SSL("smtp.gmail.com", port)
+            server = SMTP_SSL("smtp.hostinger.com", port)
             server.login(self.sender, self.email_pwd)
 
             # Send the email

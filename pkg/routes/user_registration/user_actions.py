@@ -97,7 +97,7 @@ async def create_user(payload: CreateUserSchema):
                             }
                         }
                     )
-                    await Email(hotp_v.at(0), payload.email, 'verification').send_email()
+                    await Email(hotp_v.at(0), payload.email, 'verification',hotp_v.at(0)).send_email()
                 except Exception as error:
                     user_collection.find_one_and_update(
                         {"_id": result.inserted_id},

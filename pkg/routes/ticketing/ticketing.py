@@ -4,6 +4,8 @@ from fastapi import FastAPI, HTTPException, Depends, Body, APIRouter, UploadFile
 from typing import List, Optional
 from bson import ObjectId
 import gridfs
+
+from config.config import settings
 from pkg.routes.authentication import val_token
 # from pkg.routes.customer.customer import generate_html_message
 from pkg.routes.emails import Email
@@ -116,7 +118,7 @@ async def create_ticket(ticket: TicketCreate, token: str = Depends(val_token)):
             else:
                 ticket_doc['assign'] = {"role": None, "id": None,
                                         "username": None}
-            admin_email = "giri1208srinivas@gmail.com"
+            admin_email = settings.EMAIL
 
             await Email(subject, admin_email, 'query_request', body).send_email()
             user_details = user_collection.find_one({'email': admin_email})

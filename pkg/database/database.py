@@ -40,8 +40,10 @@ class Database:
 
 
 # Example usage
-MONGO_URI = ("mongodb+srv://giri1208srinivas:mongouser@cluster0.extptud.mongodb.net/?retryWrites=true&w=majority"
-             "&appName=Cluster0")
+MONGO_URI = ("mongodb+srv://rxtnmongo:IrSG6HwBLnGcQizM@rxt-service.xgsfc.mongodb.net/?retryWrites=true&w=majority&appName=RxT-Service")
+    #("mongodb+srv://giri1208srinivas:mongouser@cluster0.extptud.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+    #("mongodb+srv://rxtnmongo:bwsbk3Z8j8mpyolI@rxt-service.xgsfc.mongodb.net/?retryWrites=true&w=majority&appName=RxT-Service")
+
 DB_NAME = 'rxtn'
 
 database = Database(MONGO_URI, DB_NAME)

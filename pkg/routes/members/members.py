@@ -4,13 +4,14 @@ import uuid
 from bson import json_util
 from fastapi import HTTPException, status, APIRouter, Request, Cookie, Depends, Response
 from pkg.routes.customer.customer_models import VerifyOtpRequest, ForgotPasswordRequest
+from pkg.routes.features.watsapp_token import send_whatsapp
 from pkg.routes.members.members_models import *
 from pkg.routes.serializers.userSerializers import customerEntity
 from pkg.routes.user_registration import user_utils
 from pkg.routes.customer.customer_utils import generate_temp_password, hash_password, generate_html_message, \
     verify_password
 from pkg.database.database import database
-from pkg.routes.authentication import val_token, generate_otp_token, verify_partner
+from pkg.routes.authentication import val_token, generate_otp_token
 from pkg.routes.emails import Email
 from random import randbytes
 import hashlib, base64
@@ -24,6 +25,7 @@ members_collection = database.get_collection('partners')
 user_collection = database.get_collection('users')
 request_collection = database.get_collection('pt_req_log')
 notifications_collection = database.get_collection('notifications')
+email = settings.EMAIL
 
 
 @members_router.post("/partner/signup")
@@ -84,11 +86,9 @@ async def create_user(payload: CreateMemberSchema):
             payload_token = payload.dict()
             token = generate_otp_token(payload_token, hotp_v.at(0))
             token = str(token)
-            # message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
-            message = verify_partner(token)
-
+            message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
             await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
-
+            await send_whatsapp(payload.phone )
         except Exception as error:
             members_collection.find_one_and_update({"_id": result.inserted_id}, {
                 "$set": {"verification_code": None, "updated_at": datetime.now()}, "status": "pending"})
@@ -115,8 +115,7 @@ async def partner_verification_code_generation(partner_id: str, token: str = Dep
                 }
                 token = generate_otp_token(payload, member['verification_code'])
                 token = str(token)
-                # message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
-                message = verify_partner(token)
+                message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
                 await Email(f"verification Token", member['email'], 'verification', message=message).send_email()
                 return {"msg": f"verfication sent to Partner {member['email']}"}
             else:
@@ -217,7 +216,7 @@ async def verification_request(token: str = Depends(val_token)):
                     return {'status': 'success', 'message': 'Request sent successfully'}
                 else:
                     body = {'name': member['name']}
-                    await Email('Verification Request for Code Regeneration', "giri1208srinivas@gmail.com",
+                    await Email('Verification Request for Code Regeneration', settings.EMAIL,
                                 'verification_request',
                                 body).send_email()
                     return {'status': 'success', 'message': 'Request sent successfully'}
@@ -251,6 +250,7 @@ async def get_partner_info(token: tuple = Depends(val_token)):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token or user not authorized')
     else:
         raise HTTPException(status_code=401, detail='Invalid token')
+
 
 #
 # @members_router.post("/edit/request")
@@ -534,7 +534,7 @@ async def login(payload: LoginMemberSchema, response: Response):
         query['email'] = payload.email
     if payload.username:
         query['partner_user_id'] = payload.username.lower()
-        # Check if the user exist
+
     db_user = members_collection.find_one(query)
     if not db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User not registered')

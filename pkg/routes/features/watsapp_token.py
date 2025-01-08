@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, APIRouter
+import httpx
 from pydantic import BaseModel
 import json
 from dotenv import load_dotenv
@@ -38,7 +39,7 @@ async def send_whatsapp(message: WhatsAppMessage):
         response = client.messages.create(
             to=f"whatsapp:{message.to}",
             from_="whatsapp:+19093414369",  # Replace with your Twilio WhatsApp-enabled number
-            content_sid="HXef5a85174e5b086df17a245cd345945b",#message.content_sid,
+            content_sid=message.content_sid,
             content_variables=json.dumps(message.content_variables),
             messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID)
         # Check for successful response

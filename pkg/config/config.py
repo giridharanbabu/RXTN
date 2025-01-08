@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     JWT_REFRESH_SECRET_KEY : str  # should be kept secret
     DATABASE_URL : str
     EMAIL_EXPIRATION_TIME_MIN: int
+    TWILIO_ACCOUNT_SID : str
+    TWILIO_AUTH_TOKEN : str
+    TWILIO_MESSAGING_SERVICE_SID : str
+
 
     class Config:
         env_file = '.env'

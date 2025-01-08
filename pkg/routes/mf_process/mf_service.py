@@ -7,7 +7,6 @@ from starlette import status
 from pkg.database.database import database
 from pkg.routes.authentication import val_token
 from pkg.routes.emails import Email
-from pkg.routes.features.watsapp_token import WhatsAppMessage, send_whatsapp
 from pkg.routes.mf_process.mf_model import MFRequest, MFAccount, EditMfprocess
 
 mf_router = APIRouter()
@@ -110,25 +109,8 @@ async def request_mf(mf_request: MFRequest, token: str = Depends(val_token)):
                                                                           "partner_id": str(member['_id']),
                                                                           "updated_at": datetime.now()}})
                             await Email(subject, member['email'], 'customer_request', message).send_email()
-                            if member['phone']:
-                                # Sending a WhatsApp message
-                                message_data = WhatsAppMessage(
-                                    to=member['phone'],  # Assume phone number is in the details
-                                    content_sid="",
-                                    content_variables={"1": member['name'], "3": f"MF details -{message}"}
-                                )
-                                whatsapp_response = await send_whatsapp(message_data)
+
                 await Email(subject, email, 'customer_request', message).send_email()
-                print(customer['phone'])
-                if customer['phone']:
-                    # Sending a WhatsApp message
-                    print(message)
-                    message_data = WhatsAppMessage(
-                        to="+14379917384",#customer['phone'],  # Assume phone number is in the details
-                        content_sid="",
-                        content_variables={"1": customer['name'], "3": "MF Requested sent"}
-                    )
-                    whatsapp_response = await send_whatsapp(message_data)
             else:
                 raise HTTPException(status_code=404, detail='customer not found')
         else:
