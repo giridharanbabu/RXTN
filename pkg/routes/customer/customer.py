@@ -57,7 +57,7 @@ async def customer_register(customer: Customer, token: str = Depends(val_token))
                         result = customers_collection.insert_one(details)
                         notification = {
                             "user_id": payload['id'],
-                            "message": f" New Customer created-  {customer['name']}",
+                            "message": f" New Customer created-  {details['name']}",
                             "Customer_id": str(result.inserted_id),
                             "status": "unread",
                             "created_at": datetime.now()
