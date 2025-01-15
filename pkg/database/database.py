@@ -50,4 +50,4 @@ database = Database(MONGO_URI, DB_NAME)
 
 user_collection = database.get_collection('users')
 
-print(database)
+# print(database)

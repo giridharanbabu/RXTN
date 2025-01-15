@@ -5,6 +5,7 @@ from jose import jwt, JWTError
 from typing import Union, Any
 from config.config import settings
 from pkg.database.database import database
+from passlib.exc import UnknownHashError
 
 user_collection = database.get_collection('users')
 login_activity_collection = database.get_collection('login_activity')
@@ -14,14 +15,27 @@ REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 
 
 def hash_password(password: str):
-    return pwd_context.hash(password)
+    try:
+        hashed = pwd_context.hash(password)
+        return hashed
+    except Exception as e:
+        print(f"Error hashing password: {e}")
+        return None  # Optionally raise a custom exception
 
 
 def verify_password(password: str, hashed_password: str):
-    return pwd_context.verify(password, hashed_password)
+    try:
+        return pwd_context.verify(password, hashed_password)
+    except UnknownHashError:
+        print("Error: Unknown hash algorithm or invalid hash format.")
+        return False
+    except Exception as e:
+        print(f"Error verifying password: {e}")
+        return False
 
 
-def create_access_token(subject: Union[str, Any], name: str, role: str, userid: str, expires_delta: timedelta = None) -> str:
+def create_access_token(subject: Union[str, Any], name: str, role: str, userid: str,
+                        expires_delta: timedelta = None) -> str:
     if expires_delta:
         expire = datetime.now() + expires_delta
     else:
@@ -90,10 +104,11 @@ def keep_last_three_logins(email: str, role: str, user_id: str):
     query = {'email': email}
     if user_id:
         query[role] = user_id
-    seven_days_ago = datetime.now() - timedelta( days=7)
+    seven_days_ago = datetime.now() - timedelta(days=7)
 
-    cursor = login_activity_collection.find({'email': email, 'role':role, 'user_id': user_id, 'created_at': {'$lt': seven_days_ago}}).sort('created_at', -1).skip(3)
+    cursor = login_activity_collection.find(
+        {'email': email, 'role': role, 'user_id': user_id, 'created_at': {'$lt': seven_days_ago}}).sort('created_at',
+                                                                                                        -1).skip(3)
     ids_to_delete = [doc['_id'] for doc in cursor]
     if ids_to_delete:
         login_activity_collection.delete_many({'_id': {'$in': ids_to_delete}})
-

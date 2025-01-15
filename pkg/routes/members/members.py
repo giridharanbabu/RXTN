@@ -86,7 +86,7 @@ async def create_user(payload: CreateMemberSchema):
             payload_token = payload.dict()
             token = generate_otp_token(payload_token, hotp_v.at(0))
             token = str(token)
-            message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
+            message = f"https://api-v1.rxtn.in/members/verifyemail/{token}"
             await Email(f"verification Token", payload.email, 'verification', message=message).send_email()
             await send_whatsapp(payload.phone )
         except Exception as error:
@@ -115,7 +115,7 @@ async def partner_verification_code_generation(partner_id: str, token: str = Dep
                 }
                 token = generate_otp_token(payload, member['verification_code'])
                 token = str(token)
-                message = f"https://rxtn.onrender.com/members/verifyemail/{token}"
+                message = f"https://api-v1.rxtn.in/members/verifyemail/{token}"
                 await Email(f"verification Token", member['email'], 'verification', message=message).send_email()
                 return {"msg": f"verfication sent to Partner {member['email']}"}
             else:

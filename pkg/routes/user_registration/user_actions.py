@@ -140,7 +140,6 @@ async def login(payload: LoginUserSchema, response: Response):
         if not user['verified']:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Please verify your email address')
-
         # Check if the password is valid
         if not user_utils.verify_password(payload.password, user['password']):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
@@ -236,7 +235,6 @@ async def reset_password(new_password, otp: str = Depends(verify_otp)):
         if user:
             # Update the user data in MongoDB
             new_password = user_utils.hash_password(new_password)
-            print(new_password)
             result = user_collection.update_one({"_id": user["_id"]},
                                                 {"$set": {"password": new_password, "updated_at": datetime.now()}})
             if result:
@@ -255,7 +253,6 @@ async def get_user_info(token: str = Depends(val_token)):
     if token[0]:
         payload = token[1]
         user = user_collection.find_one({'email': payload["email"]})
-        print(user)
         if user:
             try:
                 members_count = len(user.get('members', []))
@@ -334,7 +331,6 @@ async def upload_photos(
 def search_collection(collection, query: str, fields: List[str]):
     search_query = {"$or": [{field: {"$regex": query.lower(), "$options": "i"}} for field in fields]}
     results = collection.find(search_query)
-    print(results)
     return [{"id": str(item["_id"]), **item} for item in results]
 
 

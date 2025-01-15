@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pkg.routes import authentication
+from pkg.routes.features import watsapp_token
 from pkg.routes.mf_process import mf_service
 from pkg.routes.notifications import notification
 from pkg.routes.ticketing import ticketing
@@ -17,7 +18,7 @@ app = FastAPI()
 
 # CORS url
 origins = [
-    '*', 'https://rxtn.onrender.com'
+    '*', 'https://api-v1.rxtn.in'
 ]
 
 # adding middleware
@@ -38,6 +39,7 @@ app.include_router(ticketing.ticket_router, tags=['Ticketing'])
 app.include_router(web_socket_service.websocket_router, tags=['socket'])
 app.include_router(mf_service.mf_router, tags=['MFProcess'])
 app.include_router(notification.notification_router, tags=['Notification'])
+app.include_router(watsapp_token.watsapp_router,tags=['Notification'])
 
 
 @app.get("/health")

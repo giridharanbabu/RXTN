@@ -14,13 +14,31 @@ auth_router = APIRouter()
 password_context = CryptContext(["sha256_crypt"])
 
 
-def get_hashed_password(password):
-    """Get encrypted password"""
-    return password_context.hash(password)
+# def get_hashed_password(password):
+#     """Get encrypted password"""
+#     return password_context.hash(password)
+#
+#
+# def verify_password(plain_password, hashed_password):
+#     return password_context.verify(plain_password, hashed_password)
 
+def get_hashed_password(password: str):
+    try:
+        hashed = password_context.hash(password)
+        return hashed
+    except Exception as e:
+        print(f"Error hashing password: {e}")
+        return None  # Optionally raise a custom exception
 
 def verify_password(plain_password, hashed_password):
-    return password_context.verify(plain_password, hashed_password)
+    try:
+        return password_context.verify(plain_password, hashed_password)
+    except UnknownHashError:
+        print("Error: Unknown hash algorithm or invalid hash format.")
+        return False
+    except Exception as e:
+        print(f"Error verifying password: {e}")
+        return False
 
 
 async def verify_token(token: str):
