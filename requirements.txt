@@ -62,4 +62,4 @@ google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
 websockets
 twilio==9.1.0
-fastapi-jwt-auth==0.5.0
+fastapi-jwt-auth
